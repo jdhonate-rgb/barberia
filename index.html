@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10223F">
+<title>Barbería</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#10223F;--paper:#F6F7F9;--line:#DDE2EA;--red:#C0272D;--blue:#2F6DB5;--mute:#5B6778;--ok:#1F7A4D}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:16px;line-height:1.4}
+.pole{height:8px;background:repeating-linear-gradient(135deg,var(--red) 0 12px,#fff 12px 24px,var(--blue) 24px 36px,#fff 36px 48px)}
+h1{font-size:2.2rem;font-weight:800;letter-spacing:-.02em;margin:.6em 0 .2em;line-height:1.1}
+h2{margin:0;font-size:1.6rem;letter-spacing:-.01em}
+.auth{max-width:420px;margin:0 auto;padding:24px 20px 40px}
+label{display:block;font-weight:600;font-size:.9rem;margin:14px 0 6px}
+input,select,textarea{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:inherit}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--blue);outline-offset:1px}
+button{font:inherit;cursor:pointer}
+.btn{background:var(--ink);color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:600}
+.btn.sec{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.btn.block{width:100%;margin-top:20px}
+.btn:disabled{opacity:.6}
+.link{background:none;border:0;color:var(--blue);text-decoration:underline;padding:8px}
+.link.light{color:#fff}
+.mute{color:var(--mute)}
+.info{background:#DCE8F7;padding:12px;border-radius:8px}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 16px;background:var(--ink);color:#fff;position:relative;z-index:6}
+nav.nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav.nav button{flex:1;padding:16px 4px;background:none;border:0;font-weight:600;color:var(--mute);position:relative}
+nav.nav button.on{color:var(--ink)}
+nav.nav button.on::after{content:"";position:absolute;top:0;left:20%;right:20%;height:4px;background:var(--red)}
+main{padding:16px 16px 100px;max-width:900px;margin:0 auto}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:8px 0 14px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:8px;width:100%;text-align:left;color:inherit}
+.row small{color:var(--mute)}
+.row.off{opacity:.55}
+.chip{font-size:.8rem;font-weight:600;padding:3px 10px;border-radius:99px;background:#E8EDF5;white-space:nowrap}
+.chip.ATENDIDA{background:#DDF2E6;color:var(--ok)}
+.chip.CONFIRMADA{background:#DCE8F7;color:var(--blue)}
+.chip.CANCELADA,.chip.NO_ASISTIO{background:#F9DEDF;color:var(--red)}
+.empty{color:var(--mute);padding:24px 0}
+.chk{display:flex;gap:8px;align-items:center;font-weight:400;margin:10px 0 14px}
+.chk input{width:auto}
+.dia{display:flex;gap:8px}
+.dia .btn{width:52px;padding:0}
+.cap{text-transform:capitalize;margin:10px 0 14px}
+.acts{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+dialog{border:0;border-radius:14px;padding:20px;width:min(520px,calc(100vw - 24px));max-height:92dvh;color:var(--ink)}
+dialog::backdrop{background:rgba(16,34,63,.55)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+#toast.err{background:var(--red)}
+@media(min-width:900px){
+ nav.nav{top:0;bottom:auto;right:auto;width:220px;flex-direction:column;border-top:0;border-right:1px solid var(--line);padding-top:84px}
+ nav.nav button{text-align:left;padding:14px 24px;flex:none}
+ nav.nav button.on::after{top:20%;bottom:20%;left:0;right:auto;width:4px;height:auto}
+ .wrap{padding-left:220px}
+ main{padding-bottom:40px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div><dialog id="dlg"></dialog><div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const sb=supabase.createClient("https://gjqobyjebalbscgozvpa.supabase.co","sb_publishable_lEZmkS6mVv7WdiM3u4upeA_m64a4zM6");
+const $=s=>document.querySelector(s),app=$('#app'),dlg=$('#dlg');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fecha=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const hora=d=>new Date(d).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+const bonito=s=>{s=s.replace(/_/g,' ').toLowerCase();return s[0].toUpperCase()+s.slice(1)};
+const S={perfil:null,negocio:null,vista:'agenda',dia:fecha(new Date())};
+const dinero=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:S.negocio?.moneda||'COP',maximumFractionDigits:0}).format(n||0);
+const slug=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40);
+const traducir=m=>m.includes('Invalid login')?'Correo o contraseña incorrectos.':m.includes('not confirmed')?'Confirma tu correo antes de entrar.':m.includes('already registered')?'Ese correo ya tiene cuenta. Entra con tu contraseña.':m.includes('exclusion')?'Ese barbero ya tiene una cita en ese horario.':m.includes('duplicate key')?'Ese enlace ya está en uso, prueba otro.':m;
+let tt;function toast(m,err){const t=$('#toast');t.textContent=m;t.className='show'+(err?' err':'');clearTimeout(tt);tt=setTimeout(()=>t.className='',4000)}
+
+/* ---------- Acceso ---------- */
+function pantallaAuth(modo='login',msg=''){
+ const reg=modo==='registro';
+ app.innerHTML=`<div class="pole"></div><div class="auth"><h1>${reg?'Crea tu cuenta':'Entra a tu barbería'}</h1>
+ <p class="mute">${reg?'Registra tu correo para empezar. Después configuras tu barbería.':'Agenda, clientes y equipo en un solo lugar.'}</p>
+ ${msg?`<p class="info">${esc(msg)}</p>`:''}
+ <form id="f"><label for="em">Correo</label><input id="em" type="email" autocomplete="email" required>
+ <label for="pw">Contraseña</label><input id="pw" type="password" minlength="6" autocomplete="${reg?'new-password':'current-password'}" required>
+ <button class="btn block">${reg?'Crear cuenta':'Entrar'}</button></form>
+ <p style="text-align:center;margin-top:20px"><button class="link" id="sw">${reg?'Ya tengo cuenta':'Soy nuevo, crear cuenta'}</button></p></div>`;
+ $('#sw').onclick=()=>pantallaAuth(reg?'login':'registro');
+ $('#f').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('button');b.disabled=true;
+  const c={email:$('#em').value.trim(),password:$('#pw').value};
+  const{data,error}=reg?await sb.auth.signUp(c):await sb.auth.signInWithPassword(c);
+  b.disabled=false;
+  if(error)return toast(traducir(error.message),true);
+  if(data.session)cargar();else pantallaAuth('login','Te enviamos un correo para confirmar tu cuenta. Confírmalo y luego entra.')};
+}
+function onboarding(){
+ app.innerHTML=`<div class="pole"></div><div class="auth"><h1>Configura tu barbería</h1><p class="mute">Con estos datos creamos tu espacio y tu enlace de reservas.</p>
+ <form id="f"><label for="nb">Nombre de la barbería</label><input id="nb" required>
+ <label for="sl">Enlace de reservas</label><input id="sl" pattern="[a-z0-9-]{3,40}" title="Entre 3 y 40 letras minúsculas, números o guiones" required>
+ <label for="na">Tu nombre</label><input id="na" required>
+ <button class="btn block">Crear mi barbería</button></form>
+ <p style="text-align:center;margin-top:20px"><button class="link" id="out">Salir</button></p></div>`;
+ $('#nb').oninput=e=>{if(!$('#sl').dataset.m)$('#sl').value=slug(e.target.value)};
+ $('#sl').oninput=e=>{e.target.dataset.m=1};
+ $('#out').onclick=()=>sb.auth.signOut();
+ $('#f').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('.btn');b.disabled=true;
+  const{error}=await sb.rpc('crear_negocio',{p_nombre:$('#nb').value.trim(),p_slug:$('#sl').value,p_nombre_admin:$('#na').value.trim()});
+  b.disabled=false;if(error)return toast(traducir(error.message),true);cargar()};
+}
+async function cargar(){
+ const{data:{user}}=await sb.auth.getUser();
+ const{data:p,error}=await sb.from('perfiles').select('*,negocios(*)').eq('id',user.id).maybeSingle();
+ if(error)return toast(error.message,true);
+ if(!p)return onboarding();
+ S.perfil=p;S.negocio=p.negocios;shell();
+}
+
+/* ---------- Estructura ---------- */
+const MENU=[['agenda','Agenda'],['clientes','Clientes'],['barberos','Barberos'],['servicios','Servicios']];
+function shell(){
+ app.innerHTML=`<div class="pole"></div><div class="bar"><strong>${esc(S.negocio.nombre)}</strong><span><small>${esc(S.perfil.nombre)}, ${S.perfil.rol.toLowerCase()}</small> <button class="link light" id="out">Salir</button></span></div>
+ <nav class="nav">${MENU.map(([k,l])=>`<button data-v="${k}">${l}</button>`).join('')}</nav><div class="wrap"><main id="main"></main></div>`;
+ $('#out').onclick=()=>sb.auth.signOut();
+ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{S.vista=b.dataset.v;ir()});
+ ir();
+}
+function ir(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.vista));S.vista==='agenda'?agenda():crud(S.vista)}
+
+/* ---------- Clientes, barberos y servicios ---------- */
+const ADM=['ADMINISTRADOR','SUPERVISOR'];
+const CFG={
+ clientes:{t:'Clientes',uno:'cliente',w:[...ADM,'BARBERO'],
+  f:[['nombre','Nombre','text',1],['telefono','Teléfono','tel'],['telefono_alterno','Teléfono alterno','tel'],['correo','Correo','email'],['fecha_nacimiento','Cumpleaños','date'],['barbero_preferido','Barbero preferido','ref:barberos'],['observaciones','Observaciones','area']],
+  l:r=>[r.nombre,r.telefono||'Sin teléfono']},
+ barberos:{t:'Barberos',uno:'barbero',w:ADM,
+  f:[['nombre','Nombre','text',1],['telefono','Teléfono','tel'],['correo','Correo','email'],['fecha_ingreso','Fecha de ingreso','date'],['modelo_pago','Modelo de pago','sel:COMISION,ALQUILER,MIXTO'],['porcentaje_comision','Porcentaje de comisión (%)','number'],['valor_alquiler','Valor del alquiler','number'],['observaciones','Observaciones','area']],
+  l:r=>[r.nombre,r.modelo_pago==='ALQUILER'?'Alquiler '+dinero(r.valor_alquiler):'Comisión '+r.porcentaje_comision+'%']},
+ servicios:{t:'Servicios',uno:'servicio',w:ADM,
+  f:[['nombre','Nombre','text',1],['categoria','Categoría','text'],['descripcion','Descripción','area'],['precio','Precio','number',1],['duracion_minutos','Duración (minutos)','number',1],['tipo_comision','Tipo de comisión','sel:PORCENTAJE,VALOR_FIJO'],['comision_valor','Valor de comisión','number']],
+  l:r=>[r.nombre,dinero(r.precio)+', '+r.duracion_minutos+' min']}
+};
+async function crud(k){
+ const c=CFG[k],main=$('#main'),puede=c.w.includes(S.perfil.rol);let ver=false,q='',rows=[];
+ main.innerHTML=`<div class="head"><h2>${c.t}</h2>${puede?`<button class="btn" id="nv">Nuevo ${c.uno}</button>`:''}</div>
+ <input id="q" type="search" placeholder="Buscar por nombre" aria-label="Buscar por nombre"><label class="chk"><input type="checkbox" id="inac"> Mostrar inactivos</label><div id="ls">Cargando…</div>`;
+ const pintar=()=>{const l=rows.filter(r=>(ver||r.estado==='ACTIVO')&&r.nombre.toLowerCase().includes(q));
+  $('#ls').innerHTML=l.length?l.map(r=>{const[a,b]=c.l(r);return `<button class="row${r.estado==='ACTIVO'?'':' off'}" data-id="${r.id}"><span><strong>${esc(a)}</strong><br><small>${esc(b)}</small></span>${r.estado==='ACTIVO'?'':'<span class="chip">Inactivo</span>'}</button>`}).join(''):`<p class="empty">${rows.length?'Sin resultados.':`Aún no hay ${c.t.toLowerCase()}. ${puede?`Toca “Nuevo ${c.uno}” para crear el primero.`:''}`}</p>`;
+  document.querySelectorAll('.row').forEach(b=>b.onclick=()=>puede&&formulario(k,rows.find(r=>r.id===b.dataset.id),cargarLista))};
+ const cargarLista=async()=>{const{data,error}=await sb.from(k).select('*').order('nombre');if(error)return toast(error.message,true);rows=data;pintar()};
+ $('#q').oninput=e=>{q=e.target.value.toLowerCase();pintar()};
+ $('#inac').onchange=e=>{ver=e.target.checked;pintar()};
+ if(puede)$('#nv').onclick=()=>formulario(k,null,cargarLista);
+ cargarLista();
+}
+async function formulario(k,r,despues){
+ const c=CFG[k],refs={};
+ for(const[,,t]of c.f)if(t.startsWith('ref:')){const tb=t.slice(4);refs[tb]=(await sb.from(tb).select('id,nombre').eq('estado','ACTIVO').order('nombre')).data||[]}
+ const campo=([n,l,t,req])=>{const v=r?r[n]??'':(n==='duracion_minutos'?30:'');const id='c_'+n;let el;
+  if(t==='area')el=`<textarea id="${id}" name="${n}" rows="3">${esc(v)}</textarea>`;
+  else if(t.startsWith('sel:'))el=`<select id="${id}" name="${n}">${t.slice(4).split(',').map(o=>`<option value="${o}"${o===v?' selected':''}>${bonito(o)}</option>`).join('')}</select>`;
+  else if(t.startsWith('ref:'))el=`<select id="${id}" name="${n}"><option value="">Sin asignar</option>${refs[t.slice(4)].map(o=>`<option value="${o.id}"${o.id===v?' selected':''}>${esc(o.nombre)}</option>`).join('')}</select>`;
+  else el=`<input id="${id}" name="${n}" type="${t}"${t==='number'?' step="any" min="0" inputmode="decimal"':''} value="${esc(v)}"${req?' required':''}>`;
+  return `<label for="${id}">${l}</label>${el}`};
+ dlg.innerHTML=`<form id="df"><h2>${r?'Editar':'Nuevo'} ${c.uno}</h2>${c.f.map(campo).join('')}<div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar</button></div>${r?`<button type="button" class="btn sec block" id="tg">${r.estado==='ACTIVO'?'Desactivar':'Reactivar'} ${c.uno}</button>`:''}</form>`;
+ dlg.showModal();
+ $('#cx').onclick=()=>dlg.close();
+ $('#df').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target),o={};
+  for(const[n,,t]of c.f){const v=fd.get(n);o[n]=t==='number'?(v===''?0:Number(v)):(v===''?(r?null:undefined):v)}
+  const op=r?sb.from(k).update(o).eq('id',r.id):sb.from(k).insert({...o,negocio_id:S.perfil.negocio_id});
+  const{error}=await op;if(error)return toast(traducir(error.message),true);dlg.close();toast('Guardado');despues()};
+ if(r)$('#tg').onclick=async()=>{const{error}=await sb.from(k).update({estado:r.estado==='ACTIVO'?'INACTIVO':'ACTIVO'}).eq('id',r.id);if(error)return toast(error.message,true);dlg.close();despues()};
+}
+
+/* ---------- Agenda ---------- */
+async function agenda(){
+ const main=$('#main'),d0=new Date(S.dia+'T00:00:00'),d1=new Date(d0);d1.setDate(d1.getDate()+1);
+ const{data,error}=await sb.from('citas').select('*,clientes(nombre),barberos(nombre),servicios(nombre)').gte('inicio',d0.toISOString()).lt('inicio',d1.toISOString()).order('inicio');
+ if(error)return toast(error.message,true);
+ main.innerHTML=`<div class="head"><h2>Agenda</h2><button class="btn" id="nv">Nueva cita</button></div>
+ <div class="dia"><button class="btn sec" id="pv" aria-label="Día anterior">‹</button><input type="date" id="dd" value="${S.dia}" aria-label="Fecha"><button class="btn sec" id="nx" aria-label="Día siguiente">›</button></div>
+ <p class="mute cap">${d0.toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long'})}</p>
+ ${data.length?data.map(c=>`<button class="row" data-id="${c.id}"><span><strong>${hora(c.inicio)} a ${hora(c.fin)}</strong><br>${esc(c.clientes?.nombre)}<br><small>${esc(c.servicios?.nombre)} con ${esc(c.barberos?.nombre)}</small></span><span class="chip ${c.estado}">${bonito(c.estado)}</span></button>`).join(''):'<p class="empty">No hay citas este día. Toca “Nueva cita” para agendar.</p>'}`;
+ const mover=n=>{const d=new Date(d0);d.setDate(d.getDate()+n);S.dia=fecha(d);agenda()};
+ $('#pv').onclick=()=>mover(-1);$('#nx').onclick=()=>mover(1);
+ $('#dd').onchange=e=>{if(e.target.value){S.dia=e.target.value;agenda()}};
+ $('#nv').onclick=nuevaCita;
+ document.querySelectorAll('.row').forEach(b=>b.onclick=()=>editarCita(data.find(c=>c.id===b.dataset.id)));
+}
+async function nuevaCita(){
+ const[cl,ba,se]=await Promise.all([['clientes','id,nombre'],['barberos','id,nombre'],['servicios','id,nombre,duracion_minutos']].map(([t,s])=>sb.from(t).select(s).eq('estado','ACTIVO').order('nombre').then(r=>r.data||[])));
+ if(!cl.length||!ba.length||!se.length)return toast('Antes de agendar crea al menos un cliente, un barbero y un servicio.',true);
+ const ini=new Date(S.dia+'T09:00:00'),loc=new Date(ini.getTime()-ini.getTimezoneOffset()*6e4).toISOString().slice(0,16);
+ const op=a=>a.map(o=>`<option value="${o.id}">${esc(o.nombre)}</option>`).join('');
+ dlg.innerHTML=`<form id="df"><h2>Nueva cita</h2>
+ <label for="a1">Cliente</label><select id="a1" name="cliente_id" required>${op(cl)}</select>
+ <label for="a2">Servicio</label><select id="a2" name="servicio_id" required>${op(se)}</select>
+ <label for="a3">Barbero</label><select id="a3" name="barbero_id" required>${op(ba)}</select>
+ <label for="a4">Fecha y hora</label><input id="a4" name="inicio" type="datetime-local" value="${loc}" required>
+ <label for="a5">Observaciones</label><textarea id="a5" name="observaciones" rows="2"></textarea>
+ <div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Agendar cita</button></div></form>`;
+ dlg.showModal();$('#cx').onclick=()=>dlg.close();
+ $('#df').onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
+  const i=new Date(f.inicio),dur=se.find(s=>s.id===f.servicio_id).duracion_minutos;
+  const{error}=await sb.from('citas').insert({cliente_id:f.cliente_id,servicio_id:f.servicio_id,barbero_id:f.barbero_id,observaciones:f.observaciones||null,inicio:i.toISOString(),fin:new Date(i.getTime()+dur*6e4).toISOString(),negocio_id:S.perfil.negocio_id,creado_por:S.perfil.id,origen:'APP'});
+  if(error)return toast(traducir(error.message),true);
+  dlg.close();toast('Cita agendada');S.dia=fecha(i);agenda()};
+}
+function editarCita(c){
+ const E=['PENDIENTE','CONFIRMADA','ATENDIDA','CANCELADA','NO_ASISTIO'];
+ dlg.innerHTML=`<form id="df"><h2>${esc(c.clientes?.nombre)}</h2><p class="mute">${hora(c.inicio)} a ${hora(c.fin)}, ${esc(c.servicios?.nombre)} con ${esc(c.barberos?.nombre)}. Para cambiar la hora, cancela esta cita y agenda otra.</p>
+ <label for="e1">Estado</label><select id="e1" name="estado">${E.map(o=>`<option value="${o}"${o===c.estado?' selected':''}>${bonito(o)}</option>`).join('')}</select>
+ <label for="e2">Observaciones</label><textarea id="e2" name="observaciones" rows="3">${esc(c.observaciones||'')}</textarea>
+ <div class="acts"><button type="button" class="btn sec" id="cx">Cerrar</button><button class="btn">Guardar</button></div></form>`;
+ dlg.showModal();$('#cx').onclick=()=>dlg.close();
+ $('#df').onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
+  const{error}=await sb.from('citas').update({estado:f.estado,observaciones:f.observaciones||null}).eq('id',c.id);
+  if(error)return toast(traducir(error.message),true);dlg.close();toast('Cita actualizada');agenda()};
+}
+
+/* ---------- Inicio ---------- */
+sb.auth.onAuthStateChange(ev=>{if(ev==='SIGNED_OUT')pantallaAuth()});
+(async()=>{const{data:{session}}=await sb.auth.getSession();session?cargar():pantallaAuth()})();
+</script>
+</body>
+</html>

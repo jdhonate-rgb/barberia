@@ -61,6 +61,13 @@ dialog::backdrop{background:rgba(16,34,63,.55)}
  .wrap{padding-left:220px}
  main{padding-bottom:40px}
 }
+.chip.PAGADA{background:#DDF2E6;color:var(--ok)}
+.chip.ANULADA{background:#F9DEDF;color:var(--red)}
+.ln{display:grid;grid-template-columns:1fr 100px;gap:8px;margin-bottom:8px}
+.ln2{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--line)}
+.tot{font-weight:800}
+.hr{display:grid;grid-template-columns:1fr 100px 100px;gap:6px;align-items:center;margin-top:8px}
+.hr .chk{margin:0}.hr input[type=time]{padding:8px 6px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -121,7 +128,7 @@ async function cargar(){
 }
 
 /* ---------- Estructura ---------- */
-const MENU=[['agenda','Agenda'],['clientes','Clientes'],['barberos','Barberos'],['servicios','Servicios']];
+const MENU=[['agenda','Agenda'],['ventas','Ventas'],['clientes','Clientes'],['barberos','Barberos'],['servicios','Servicios']];
 function shell(){
  app.innerHTML=`<div class="pole"></div><div class="bar"><strong>${esc(S.negocio.nombre)}</strong><span><small>${esc(S.perfil.nombre)}, ${S.perfil.rol.toLowerCase()}</small> <button class="link light" id="out">Salir</button></span></div>
  <nav class="nav">${MENU.map(([k,l])=>`<button data-v="${k}">${l}</button>`).join('')}</nav><div class="wrap"><main id="main"></main></div>`;
@@ -129,7 +136,7 @@ function shell(){
  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{S.vista=b.dataset.v;ir()});
  ir();
 }
-function ir(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.vista));S.vista==='agenda'?agenda():crud(S.vista)}
+function ir(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.vista));S.vista==='agenda'?agenda():S.vista==='ventas'?ventas():crud(S.vista)}
 
 /* ---------- Clientes, barberos y servicios ---------- */
 const ADM=['ADMINISTRADOR','SUPERVISOR'];
@@ -166,13 +173,14 @@ async function formulario(k,r,despues){
   else if(t.startsWith('ref:'))el=`<select id="${id}" name="${n}"><option value="">Sin asignar</option>${refs[t.slice(4)].map(o=>`<option value="${o.id}"${o.id===v?' selected':''}>${esc(o.nombre)}</option>`).join('')}</select>`;
   else el=`<input id="${id}" name="${n}" type="${t}"${t==='number'?' step="any" min="0" inputmode="decimal"':''} value="${esc(v)}"${req?' required':''}>`;
   return `<label for="${id}">${l}</label>${el}`};
- dlg.innerHTML=`<form id="df"><h2>${r?'Editar':'Nuevo'} ${c.uno}</h2>${c.f.map(campo).join('')}<div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar</button></div>${r?`<button type="button" class="btn sec block" id="tg">${r.estado==='ACTIVO'?'Desactivar':'Reactivar'} ${c.uno}</button>`:''}</form>`;
+ dlg.innerHTML=`<form id="df"><h2>${r?'Editar':'Nuevo'} ${c.uno}</h2>${c.f.map(campo).join('')}<div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar</button></div>${r&&k==='barberos'?'<button type="button" class="btn sec block" id="hr">Horario de atención</button>':''}${r?`<button type="button" class="btn sec block" id="tg">${r.estado==='ACTIVO'?'Desactivar':'Reactivar'} ${c.uno}</button>`:''}</form>`;
  dlg.showModal();
  $('#cx').onclick=()=>dlg.close();
  $('#df').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target),o={};
   for(const[n,,t]of c.f){const v=fd.get(n);o[n]=t==='number'?(v===''?0:Number(v)):(v===''?(r?null:undefined):v)}
   const op=r?sb.from(k).update(o).eq('id',r.id):sb.from(k).insert({...o,negocio_id:S.perfil.negocio_id});
   const{error}=await op;if(error)return toast(traducir(error.message),true);dlg.close();toast('Guardado');despues()};
+ if(r&&k==='barberos')$('#hr').onclick=()=>horarios(r);
  if(r)$('#tg').onclick=async()=>{const{error}=await sb.from(k).update({estado:r.estado==='ACTIVO'?'INACTIVO':'ACTIVO'}).eq('id',r.id);if(error)return toast(error.message,true);dlg.close();despues()};
 }
 
@@ -220,6 +228,86 @@ function editarCita(c){
  $('#df').onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
   const{error}=await sb.from('citas').update({estado:f.estado,observaciones:f.observaciones||null}).eq('id',c.id);
   if(error)return toast(traducir(error.message),true);dlg.close();toast('Cita actualizada');agenda()};
+}
+
+/* ---------- Horarios ---------- */
+async function horarios(b){
+ const{data}=await sb.from('horarios_barbero').select('*').eq('barbero_id',b.id);
+ const D=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'],O=[1,2,3,4,5,6,0];
+ dlg.innerHTML=`<form id="df"><h2>Horario de ${esc(b.nombre)}</h2><p class="mute">Marca los días que atiende y su hora de entrada y salida.</p>${O.map(d=>{const x=(data||[]).find(y=>y.dia_semana===d);return `<div class="hr"><label class="chk"><input type="checkbox" name="o${d}"${x?' checked':''}>${D[d]}</label><input type="time" name="a${d}" value="${x?x.hora_inicio.slice(0,5):'09:00'}" aria-label="Entrada ${D[d]}"><input type="time" name="b${d}" value="${x?x.hora_fin.slice(0,5):'18:00'}" aria-label="Salida ${D[d]}"></div>`}).join('')}<div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar horario</button></div></form>`;
+ $('#cx').onclick=()=>dlg.close();
+ $('#df').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),L=[];
+  for(const d of O)if(f.get('o'+d))L.push({negocio_id:S.perfil.negocio_id,barbero_id:b.id,dia_semana:d,hora_inicio:f.get('a'+d),hora_fin:f.get('b'+d)});
+  let{error}=await sb.from('horarios_barbero').delete().eq('barbero_id',b.id);
+  if(!error&&L.length)({error}=await sb.from('horarios_barbero').insert(L));
+  if(error)return toast(error.message.includes('check')?'La hora de salida debe ser después de la entrada.':error.message,true);
+  dlg.close();toast('Horario guardado')};
+}
+
+/* ---------- Ventas y pagos ---------- */
+const METODOS=['EFECTIVO','TRANSFERENCIA','TARJETA','NEQUI','DAVIPLATA'].map(m=>`<option value="${m}">${bonito(m)}</option>`).join('');
+async function ventas(){
+ const{data,error}=await sb.from('ventas').select('*,clientes(nombre),barberos(nombre)').order('fecha_hora',{ascending:false}).limit(40);
+ if(error)return toast(error.message,true);
+ $('#main').innerHTML=`<div class="head"><h2>Ventas</h2><button class="btn" id="nv">Nueva venta</button></div>
+ ${data.length?data.map(v=>`<button class="row" data-id="${v.id}"><span><strong>${esc(v.clientes?.nombre||'Cliente de paso')}</strong><br><small>${new Date(v.fecha_hora).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}, ${dinero(v.total_venta)}${v.saldo_pendiente>0&&v.estado_venta!=='ANULADA'?', debe '+dinero(v.saldo_pendiente):''}</small></span><span class="chip ${v.estado_venta}">${bonito(v.estado_venta)}</span></button>`).join(''):'<p class="empty">Aún no hay ventas. Toca “Nueva venta” para cobrar la primera.</p>'}`;
+ $('#nv').onclick=nuevaVenta;
+ document.querySelectorAll('.row').forEach(b=>b.onclick=()=>detalleVenta(data.find(v=>v.id===b.dataset.id)));
+}
+async function nuevaVenta(){
+ const[cl,ba,se,pr]=await Promise.all([['clientes','id,nombre'],['barberos','id,nombre,modelo_pago'],['servicios','id,nombre,precio,tipo_comision,comision_valor'],['productos','id,nombre,precio_venta,costo_unitario']].map(([t,s])=>sb.from(t).select(s).eq('estado','ACTIVO').order('nombre').then(r=>r.data||[])));
+ if(!se.length&&!pr.length)return toast('Primero crea un servicio o un producto.',true);
+ const items=[...se.map(x=>({k:'s:'+x.id,n:x.nombre,p:Number(x.precio)})),...pr.map(x=>({k:'p:'+x.id,n:x.nombre,p:Number(x.precio_venta)}))];
+ const op=a=>a.map(o=>`<option value="${o.id}">${esc(o.nombre)}</option>`).join('');
+ const lin=()=>`<div class="ln"><select aria-label="Ítem">${items.map(i=>`<option value="${i.k}">${esc(i.n)}, ${dinero(i.p)}</option>`).join('')}</select><input type="number" min="1" value="1" inputmode="numeric" aria-label="Cantidad"></div>`;
+ dlg.innerHTML=`<form id="df"><h2>Nueva venta</h2>
+ <label for="v1">Cliente</label><select id="v1" name="cliente_id"><option value="">Cliente de paso</option>${op(cl)}</select>
+ <label for="v2">Barbero</label><select id="v2" name="barbero_id"><option value="">Sin barbero</option>${op(ba)}</select>
+ <label>Servicios y productos</label><div id="lns">${lin()}</div><button type="button" class="link" id="ad">Agregar otro ítem</button>
+ <label for="v3">Descuento</label><input id="v3" name="descuento" type="number" min="0" value="0" inputmode="decimal">
+ <p class="tot" id="tt"></p>
+ <label for="v4">Método de pago</label><select id="v4" name="metodo">${METODOS}</select>
+ <label for="v5">Valor recibido ahora</label><input id="v5" name="pago" type="number" min="0" inputmode="decimal">
+ <div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Cobrar</button></div></form>`;
+ dlg.showModal();$('#cx').onclick=()=>dlg.close();
+ const calc=()=>{const L=[...document.querySelectorAll('#lns .ln')].map(l=>({i:items.find(x=>x.k===l.querySelector('select').value),q:Math.max(1,Number(l.querySelector('input').value)||1)}));const br=L.reduce((s,l)=>s+l.i.p*l.q,0),ds=Number($('#v3').value)||0;return{L,ds,t:br-ds}};
+ const ref=()=>{const c=calc();$('#tt').textContent='Total: '+dinero(c.t);if(!$('#v5').dataset.m)$('#v5').value=Math.max(0,c.t)};
+ $('#df').oninput=ref;$('#df').onchange=ref;$('#v5').oninput=e=>{e.target.dataset.m=1};
+ $('#ad').onclick=()=>{$('#lns').insertAdjacentHTML('beforeend',lin());ref()};ref();
+ $('#df').onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target)),c=calc(),pago=Number(f.pago)||0;
+  if(c.t<0)return toast('El descuento no puede superar el total.',true);
+  if(pago>c.t)return toast('El pago no puede superar el total.',true);
+  if(pago<c.t&&!S.negocio.permitir_saldos)return toast('Esta barbería no permite saldos pendientes. Recibe el pago completo.',true);
+  const bar=ba.find(x=>x.id===f.barbero_id),nid=S.perfil.negocio_id;
+  const{data:v,error}=await sb.from('ventas').insert({negocio_id:nid,cliente_id:f.cliente_id||null,barbero_id:f.barbero_id||null,descuento:c.ds,metodo_pago_principal:f.metodo,creado_por:S.perfil.id}).select('id').single();
+  if(error)return toast(traducir(error.message),true);
+  const det=c.L.map(l=>{const s=l.i.k[0]==='s',id=l.i.k.slice(2),sv=s&&se.find(x=>x.id===id),pd=!s&&pr.find(x=>x.id===id);
+   const com=sv&&bar&&bar.modelo_pago!=='ALQUILER'?(sv.tipo_comision==='PORCENTAJE'?sv.precio*l.q*sv.comision_valor/100:sv.comision_valor*l.q):0;
+   return{negocio_id:nid,venta_id:v.id,tipo_item:s?'SERVICIO':'PRODUCTO',servicio_id:s?id:null,producto_id:s?null:id,descripcion:l.i.n,cantidad:l.q,precio_unitario:l.i.p,costo_unitario:pd?pd.costo_unitario:0,comision_generada:com}});
+  let r=await sb.from('detalle_ventas').insert(det);
+  if(!r.error&&pago>0)r=await sb.from('pagos').insert({negocio_id:nid,venta_id:v.id,valor_pago:pago,metodo_pago:f.metodo,recibido_por:S.perfil.id});
+  if(r.error){await sb.from('ventas').delete().eq('id',v.id);return toast(r.error.message,true)}
+  dlg.close();toast('Venta registrada');ventas()};
+}
+async function detalleVenta(v){
+ const[{data:d},{data:p}]=await Promise.all([sb.from('detalle_ventas').select('*').eq('venta_id',v.id),sb.from('pagos').select('*').eq('venta_id',v.id).order('fecha_hora')]);
+ const abierta=v.estado_venta==='PENDIENTE',fila=(a,b,c='')=>`<div class="ln2 ${c}"><span>${a}</span><span>${b}</span></div>`;
+ dlg.innerHTML=`<form id="df"><h2>${esc(v.clientes?.nombre||'Cliente de paso')}</h2><p class="mute">${new Date(v.fecha_hora).toLocaleString('es-CO',{dateStyle:'medium',timeStyle:'short'})}${v.barberos?', '+esc(v.barberos.nombre):''}</p>
+ ${d.map(x=>fila(x.cantidad+' × '+esc(x.descripcion),dinero(x.subtotal))).join('')}
+ ${v.descuento>0?fila('Descuento','-'+dinero(v.descuento)):''}
+ ${fila('Total',dinero(v.total_venta),'tot')}${fila('Pagado',dinero(v.total_pagado))}${fila('Saldo',dinero(v.saldo_pendiente))}
+ ${p.length?'<label>Pagos</label>'+p.map(x=>fila(bonito(x.metodo_pago)+', '+hora(x.fecha_hora),dinero(x.valor_pago))).join(''):''}
+ ${abierta?`<label for="pg">Registrar otro pago</label><div class="ln"><input id="pg" type="number" min="1" inputmode="decimal" value="${v.saldo_pendiente}"><select id="mp" aria-label="Método">${METODOS}</select></div><button type="button" class="btn block" id="rp">Registrar pago</button>`:''}
+ ${ADM.includes(S.perfil.rol)&&v.estado_venta!=='ANULADA'?'<button type="button" class="btn sec block" id="an">Anular venta</button>':''}
+ <div class="acts"><button type="button" class="btn sec" id="cx">Cerrar</button></div></form>`;
+ dlg.showModal();$('#cx').onclick=()=>dlg.close();
+ if(abierta)$('#rp').onclick=async()=>{const n=Number($('#pg').value);
+  if(!(n>0)||n>v.saldo_pendiente)return toast('El pago debe ser mayor a cero y no superar el saldo.',true);
+  const{error}=await sb.from('pagos').insert({negocio_id:S.perfil.negocio_id,venta_id:v.id,valor_pago:n,metodo_pago:$('#mp').value,recibido_por:S.perfil.id});
+  if(error)return toast(error.message,true);dlg.close();toast('Pago registrado');ventas()};
+ const an=$('#an');if(an)an.onclick=async()=>{if(!confirm('¿Anular esta venta? No se puede deshacer.'))return;
+  const{error}=await sb.from('ventas').update({estado_venta:'ANULADA'}).eq('id',v.id);
+  if(error)return toast(error.message,true);dlg.close();toast('Venta anulada');ventas()};
 }
 
 /* ---------- Inicio ---------- */

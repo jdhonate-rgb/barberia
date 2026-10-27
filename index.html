@@ -28,8 +28,8 @@ button{font:inherit;cursor:pointer}
 .mute{color:var(--mute)}
 .info{background:#DCE8F7;padding:12px;border-radius:8px}
 .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 16px;background:var(--ink);color:#fff;position:relative;z-index:6}
-nav.nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
-nav.nav button{flex:1;padding:16px 4px;background:none;border:0;font-weight:600;color:var(--mute);position:relative}
+nav.nav{position:fixed;bottom:0;left:0;right:0;display:flex;overflow-x:auto;background:#fff;border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav.nav button{flex:1 0 auto;padding:16px 14px;background:none;border:0;font-weight:600;color:var(--mute);position:relative}
 nav.nav button.on{color:var(--ink)}
 nav.nav button.on::after{content:"";position:absolute;top:0;left:20%;right:20%;height:4px;background:var(--red)}
 main{padding:16px 16px 100px;max-width:900px;margin:0 auto}
@@ -128,15 +128,15 @@ async function cargar(){
 }
 
 /* ---------- Estructura ---------- */
-const MENU=[['agenda','Agenda'],['ventas','Ventas'],['clientes','Clientes'],['barberos','Barberos'],['servicios','Servicios']];
+const MENU=[['agenda','Agenda'],['ventas','Ventas'],['clientes','Clientes'],['barberos','Barberos'],['servicios','Servicios'],['productos','Productos'],['caja','Caja',1],['comisiones','Comisiones',1]];
 function shell(){
  app.innerHTML=`<div class="pole"></div><div class="bar"><strong>${esc(S.negocio.nombre)}</strong><span><small>${esc(S.perfil.nombre)}, ${S.perfil.rol.toLowerCase()}</small> <button class="link light" id="out">Salir</button></span></div>
- <nav class="nav">${MENU.map(([k,l])=>`<button data-v="${k}">${l}</button>`).join('')}</nav><div class="wrap"><main id="main"></main></div>`;
+ <nav class="nav">${MENU.filter(m=>!m[2]||ADM.includes(S.perfil.rol)).map(([k,l])=>`<button data-v="${k}">${l}</button>`).join('')}</nav><div class="wrap"><main id="main"></main></div>`;
  $('#out').onclick=()=>sb.auth.signOut();
  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{S.vista=b.dataset.v;ir()});
  ir();
 }
-function ir(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.vista));S.vista==='agenda'?agenda():S.vista==='ventas'?ventas():crud(S.vista)}
+function ir(){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.vista));({agenda,ventas,caja,comisiones}[S.vista]||(()=>crud(S.vista)))()}
 
 /* ---------- Clientes, barberos y servicios ---------- */
 const ADM=['ADMINISTRADOR','SUPERVISOR'];
@@ -149,7 +149,10 @@ const CFG={
   l:r=>[r.nombre,r.modelo_pago==='ALQUILER'?'Alquiler '+dinero(r.valor_alquiler):'Comisión '+r.porcentaje_comision+'%']},
  servicios:{t:'Servicios',uno:'servicio',w:ADM,
   f:[['nombre','Nombre','text',1],['categoria','Categoría','text'],['descripcion','Descripción','area'],['precio','Precio','number',1],['duracion_minutos','Duración (minutos)','number',1],['tipo_comision','Tipo de comisión','sel:PORCENTAJE,VALOR_FIJO'],['comision_valor','Valor de comisión','number']],
-  l:r=>[r.nombre,dinero(r.precio)+', '+r.duracion_minutos+' min']}
+  l:r=>[r.nombre,dinero(r.precio)+', '+r.duracion_minutos+' min']},
+ productos:{t:'Productos',uno:'producto',w:ADM,
+  f:[['nombre','Nombre','text',1],['categoria','Categoría','text'],['descripcion','Descripción','area'],['costo_unitario','Costo de compra','number'],['precio_venta','Precio de venta','number',1],['stock_minimo','Stock mínimo','number']],
+  l:r=>[r.nombre,dinero(r.precio_venta)+', en stock: '+(r.existencias??0)]}
 };
 async function crud(k){
  const c=CFG[k],main=$('#main'),puede=c.w.includes(S.perfil.rol);let ver=false,q='',rows=[];
@@ -158,7 +161,7 @@ async function crud(k){
  const pintar=()=>{const l=rows.filter(r=>(ver||r.estado==='ACTIVO')&&r.nombre.toLowerCase().includes(q));
   $('#ls').innerHTML=l.length?l.map(r=>{const[a,b]=c.l(r);return `<button class="row${r.estado==='ACTIVO'?'':' off'}" data-id="${r.id}"><span><strong>${esc(a)}</strong><br><small>${esc(b)}</small></span>${r.estado==='ACTIVO'?'':'<span class="chip">Inactivo</span>'}</button>`}).join(''):`<p class="empty">${rows.length?'Sin resultados.':`Aún no hay ${c.t.toLowerCase()}. ${puede?`Toca “Nuevo ${c.uno}” para crear el primero.`:''}`}</p>`;
   document.querySelectorAll('.row').forEach(b=>b.onclick=()=>puede&&formulario(k,rows.find(r=>r.id===b.dataset.id),cargarLista))};
- const cargarLista=async()=>{const{data,error}=await sb.from(k).select('*').order('nombre');if(error)return toast(error.message,true);rows=data;pintar()};
+ const cargarLista=async()=>{const{data,error}=await sb.from(k).select('*').order('nombre');if(error)return toast(error.message,true);rows=data;if(k==='productos'){const{data:s}=await sb.from('stock_actual').select('producto_id,existencias');const m=Object.fromEntries((s||[]).map(x=>[x.producto_id,x.existencias]));rows.forEach(r=>r.existencias=m[r.id])}pintar()};
  $('#q').oninput=e=>{q=e.target.value.toLowerCase();pintar()};
  $('#inac').onchange=e=>{ver=e.target.checked;pintar()};
  if(puede)$('#nv').onclick=()=>formulario(k,null,cargarLista);
@@ -173,7 +176,7 @@ async function formulario(k,r,despues){
   else if(t.startsWith('ref:'))el=`<select id="${id}" name="${n}"><option value="">Sin asignar</option>${refs[t.slice(4)].map(o=>`<option value="${o.id}"${o.id===v?' selected':''}>${esc(o.nombre)}</option>`).join('')}</select>`;
   else el=`<input id="${id}" name="${n}" type="${t}"${t==='number'?' step="any" min="0" inputmode="decimal"':''} value="${esc(v)}"${req?' required':''}>`;
   return `<label for="${id}">${l}</label>${el}`};
- dlg.innerHTML=`<form id="df"><h2>${r?'Editar':'Nuevo'} ${c.uno}</h2>${c.f.map(campo).join('')}<div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar</button></div>${r&&k==='barberos'?'<button type="button" class="btn sec block" id="hr">Horario de atención</button>':''}${r?`<button type="button" class="btn sec block" id="tg">${r.estado==='ACTIVO'?'Desactivar':'Reactivar'} ${c.uno}</button>`:''}</form>`;
+ dlg.innerHTML=`<form id="df"><h2>${r?'Editar':'Nuevo'} ${c.uno}</h2>${c.f.map(campo).join('')}<div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar</button></div>${r&&k==='barberos'?'<button type="button" class="btn sec block" id="hr">Horario de atención</button>':''}${r&&k==='productos'?'<button type="button" class="btn sec block" id="st">Registrar entrada de stock</button>':''}${r?`<button type="button" class="btn sec block" id="tg">${r.estado==='ACTIVO'?'Desactivar':'Reactivar'} ${c.uno}</button>`:''}</form>`;
  dlg.showModal();
  $('#cx').onclick=()=>dlg.close();
  $('#df').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target),o={};
@@ -181,6 +184,9 @@ async function formulario(k,r,despues){
   const op=r?sb.from(k).update(o).eq('id',r.id):sb.from(k).insert({...o,negocio_id:S.perfil.negocio_id});
   const{error}=await op;if(error)return toast(traducir(error.message),true);dlg.close();toast('Guardado');despues()};
  if(r&&k==='barberos')$('#hr').onclick=()=>horarios(r);
+ if(r&&k==='productos')$('#st').onclick=async()=>{const n=Number(prompt('¿Cuántas unidades entraron?'));if(!(n>0))return;
+  const{error}=await sb.from('movimientos_inventario').insert({negocio_id:S.perfil.negocio_id,producto_id:r.id,tipo_movimiento:'ENTRADA',cantidad:n,costo_unitario:r.costo_unitario,motivo:'Compra',usuario_responsable:S.perfil.id});
+  if(error)return toast(error.message,true);dlg.close();toast('Stock actualizado');despues()};
  if(r)$('#tg').onclick=async()=>{const{error}=await sb.from(k).update({estado:r.estado==='ACTIVO'?'INACTIVO':'ACTIVO'}).eq('id',r.id);if(error)return toast(error.message,true);dlg.close();despues()};
 }
 
@@ -313,6 +319,59 @@ async function detalleVenta(v){
  const an=$('#an');if(an)an.onclick=async()=>{if(!confirm('¿Anular esta venta? No se puede deshacer.'))return;
   const{error}=await sb.from('ventas').update({estado_venta:'ANULADA'}).eq('id',v.id);
   if(error)return toast(error.message,true);dlg.close();toast('Venta anulada');ventas()};
+}
+
+/* ---------- Caja, gastos y comisiones ---------- */
+const fm=d=>new Date(d).toLocaleDateString('es-CO',{day:'numeric',month:'short'});
+const fila2=(a,b,c='')=>`<div class="ln2 ${c}"><span>${a}</span><span>${b}</span></div>`;
+async function caja(){
+ const main=$('#main'),{data:cj}=await sb.from('cajas').select('*').eq('estado_caja','ABIERTA').maybeSingle();
+ if(!cj){
+  const{data:u}=await sb.from('cajas').select('*').eq('estado_caja','CERRADA').order('fecha_cierre',{ascending:false}).limit(5);
+  main.innerHTML=`<div class="head"><h2>Caja</h2><button class="btn sec" id="gs">Registrar gasto</button></div><p class="info">La caja está cerrada. Ábrela al empezar el día.</p>
+  <label for="si">Efectivo inicial en caja</label><input id="si" type="number" min="0" value="0" inputmode="decimal"><button class="btn block" id="ab">Abrir caja</button>
+  ${u?.length?'<label>Últimos cierres</label>'+u.map(c=>fila2(fm(c.fecha_cierre)+', contó '+dinero(c.efectivo_contado),(c.diferencia>=0?'+':'')+dinero(c.diferencia))).join(''):''}`;
+  $('#gs').onclick=()=>gasto(null);
+  $('#ab').onclick=async()=>{const{error}=await sb.from('cajas').insert({negocio_id:S.perfil.negocio_id,usuario_apertura:S.perfil.id,saldo_inicial:Number($('#si').value)||0});if(error)return toast(error.message,true);caja()};
+  return}
+ const[{data:pg},{data:gs}]=await Promise.all([sb.from('pagos').select('valor_pago,metodo_pago,ventas(estado_venta)').eq('estado_pago','REGISTRADO').gte('fecha_hora',cj.fecha_apertura),sb.from('gastos').select('*').eq('estado_gasto','REGISTRADO').gte('fecha_hora',cj.fecha_apertura).order('fecha_hora',{ascending:false})]);
+ const por={};(pg||[]).filter(p=>p.ventas?.estado_venta!=='ANULADA').forEach(p=>por[p.metodo_pago]=(por[p.metodo_pago]||0)+Number(p.valor_pago));
+ const gEf=(gs||[]).filter(g=>g.metodo_pago==='EFECTIVO').reduce((s,g)=>s+Number(g.valor),0),esp=Number(cj.saldo_inicial)+(por.EFECTIVO||0)-gEf;
+ main.innerHTML=`<div class="head"><h2>Caja abierta</h2><button class="btn sec" id="gs">Registrar gasto</button></div>
+ <p class="mute">Desde ${new Date(cj.fecha_apertura).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
+ ${fila2('Efectivo inicial',dinero(cj.saldo_inicial))}
+ ${Object.entries(por).map(([m,v])=>fila2('Cobrado en '+bonito(m).toLowerCase(),dinero(v))).join('')||'<p class="empty">Aún no hay cobros desde que abriste la caja.</p>'}
+ ${fila2('Gastos en efectivo','-'+dinero(gEf))}${fila2('Efectivo que debe haber',dinero(esp),'tot')}
+ ${gs?.length?'<label>Gastos del turno</label>'+gs.map(g=>fila2(esc(g.descripcion||bonito(g.categoria_gasto))+', '+bonito(g.metodo_pago).toLowerCase(),dinero(g.valor))).join(''):''}
+ <button class="btn block" id="ce">Cerrar caja</button>`;
+ $('#gs').onclick=()=>gasto(cj);
+ $('#ce').onclick=()=>{dlg.innerHTML=`<form id="df"><h2>Cerrar caja</h2><p>Debe haber <strong>${dinero(esp)}</strong> en efectivo.</p><label for="ct">Efectivo contado</label><input id="ct" type="number" min="0" inputmode="decimal" required><label for="co">Observaciones</label><textarea id="co" rows="2"></textarea><div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Cerrar caja</button></div></form>`;
+  dlg.showModal();$('#cx').onclick=()=>dlg.close();
+  $('#df').onsubmit=async e=>{e.preventDefault();const n=Number($('#ct').value);
+   const{error}=await sb.from('cajas').update({estado_caja:'CERRADA',fecha_cierre:new Date().toISOString(),usuario_cierre:S.perfil.id,efectivo_esperado:esp,efectivo_contado:n,diferencia:n-esp,observaciones:$('#co').value||null}).eq('id',cj.id);
+   if(error)return toast(error.message,true);dlg.close();toast('Caja cerrada');caja()}};
+}
+function gasto(cj){
+ dlg.innerHTML=`<form id="df"><h2>Registrar gasto</h2><label for="g1">Categoría</label><select id="g1" name="categoria_gasto">${['OPERATIVO','PRODUCTOS','SERVICIOS_PUBLICOS','ARRIENDO','NOMINA','OTRO'].map(o=>`<option value="${o}">${bonito(o)}</option>`).join('')}</select>
+ <label for="g2">Descripción</label><input id="g2" name="descripcion" required><label for="g3">Valor</label><input id="g3" name="valor" type="number" min="1" inputmode="decimal" required>
+ <label for="g4">Método de pago</label><select id="g4" name="metodo_pago">${METODOS}</select><label for="g5">Proveedor</label><input id="g5" name="proveedor">
+ <div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar gasto</button></div></form>`;
+ dlg.showModal();$('#cx').onclick=()=>dlg.close();
+ $('#df').onsubmit=async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
+  const{error}=await sb.from('gastos').insert({...f,valor:Number(f.valor),proveedor:f.proveedor||null,negocio_id:S.perfil.negocio_id,usuario_registro:S.perfil.id,caja_id:cj?.id||null});
+  if(error)return toast(error.message,true);dlg.close();toast('Gasto guardado');caja()};
+}
+async function comisiones(){
+ const[{data:d,error},{data:l}]=await Promise.all([sb.from('detalle_ventas').select('id,subtotal,comision_generada,ventas!inner(barbero_id,estado_venta,barberos(nombre))').eq('ventas.estado_venta','PAGADA').gt('comision_generada',0).limit(1000),sb.from('comisiones').select('detalle_id').limit(5000)]);
+ if(error)return toast(error.message,true);
+ const hechos=new Set((l||[]).map(x=>x.detalle_id)),P={};
+ d.filter(x=>!hechos.has(x.id)&&x.ventas.barbero_id).forEach(x=>{const b=x.ventas.barbero_id;P[b]=P[b]||{n:x.ventas.barberos?.nombre,t:0,L:[]};P[b].t+=Number(x.comision_generada);P[b].L.push(x)});
+ const B=Object.entries(P);
+ $('#main').innerHTML=`<div class="head"><h2>Comisiones</h2></div><p class="mute">Comisiones por pagar de ventas ya cobradas por completo.</p>
+ ${B.length?B.map(([id,p])=>`<div class="row"><span><strong>${esc(p.n)}</strong><br><small>${p.L.length} servicio${p.L.length>1?'s':''}</small></span><span><strong>${dinero(p.t)}</strong><br><button class="btn" data-b="${id}">Liquidar</button></span></div>`).join(''):'<p class="empty">No hay comisiones pendientes.</p>'}`;
+ document.querySelectorAll('[data-b]').forEach(b=>b.onclick=async()=>{const p=P[b.dataset.b];if(!confirm('¿Liquidar '+dinero(p.t)+' a '+p.n+'?'))return;
+  const ahora=new Date().toISOString(),{error}=await sb.from('comisiones').insert(p.L.map(x=>({negocio_id:S.perfil.negocio_id,barbero_id:b.dataset.b,detalle_id:x.id,valor_base:x.subtotal,valor_comision:x.comision_generada,estado_liquidacion:'LIQUIDADA',fecha_pago:ahora})));
+  if(error)return toast(error.message,true);toast('Comisión liquidada');comisiones()});
 }
 
 /* ---------- Inicio ---------- */

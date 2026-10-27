@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10223F">
+<title>Reservar cita</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#10223F;--paper:#F6F7F9;--line:#DDE2EA;--red:#C0272D;--blue:#2F6DB5;--mute:#5B6778}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:16px;line-height:1.4}
+.pole{height:8px;background:repeating-linear-gradient(135deg,var(--red) 0 12px,#fff 12px 24px,var(--blue) 24px 36px,#fff 36px 48px)}
+main{max-width:460px;margin:0 auto;padding:20px 20px 60px}
+h1{font-size:2.1rem;font-weight:800;letter-spacing:-.02em;margin:.5em 0 .2em;line-height:1.1}
+label{display:block;font-weight:600;font-size:.9rem;margin:16px 0 6px}
+input,select{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:inherit}
+input:focus,select:focus,button:focus-visible{outline:3px solid var(--blue);outline-offset:1px}
+button{font:inherit;cursor:pointer}
+.btn{width:100%;margin-top:22px;background:var(--ink);color:#fff;border:0;border-radius:8px;padding:14px;font-weight:600}
+.btn:disabled{opacity:.6}
+.mute{color:var(--mute)}
+.hs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.h{padding:12px 6px;border:1.5px solid var(--line);background:#fff;border-radius:8px;font-weight:600;color:inherit}
+.h.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.ok{background:#fff;border:1px solid var(--line);border-left:6px solid var(--red);border-radius:10px;padding:18px;margin-top:20px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:var(--red);color:#fff;padding:12px 18px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="pole"></div><main id="app"><p class="mute">Cargando…</p></main><div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const sb=supabase.createClient("https://gjqobyjebalbscgozvpa.supabase.co","sb_publishable_lEZmkS6mVv7WdiM3u4upeA_m64a4zM6");
+const $=s=>document.querySelector(s),app=$('#app');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dinero=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0);
+const TZ='America/Bogota',slug=new URLSearchParams(location.search).get('n')||'';
+const f2=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const hh=t=>new Date(t).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',timeZone:TZ});
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.className='show';clearTimeout(tt);tt=setTimeout(()=>t.className='',4500)}
+let C,T=null;
+(async()=>{
+ const{data}=await sb.rpc('catalogo_publico',{p_slug:slug});
+ if(!data||!data.negocio)return app.innerHTML='<h1>Reservas no disponibles</h1><p class="mute">Este enlace no es válido o la barbería no recibe reservas en línea.</p>';
+ C=data;
+ if(!C.servicios.length||!C.barberos.length)return app.innerHTML=`<h1>${esc(C.negocio.nombre)}</h1><p class="mute">Todavía no hay servicios u horarios disponibles. Intenta más tarde.</p>`;
+ const hoy=f2(new Date());
+ app.innerHTML=`<h1>${esc(C.negocio.nombre)}</h1><p class="mute">Reserva tu cita en un minuto.${C.negocio.direccion?' '+esc(C.negocio.direccion):''}</p>
+ <label for="sv">Servicio</label><select id="sv">${C.servicios.map(s=>`<option value="${s.id}">${esc(s.nombre)}, ${dinero(s.precio)}, ${s.duracion_minutos} min</option>`).join('')}</select>
+ <label for="br">Barbero</label><select id="br">${C.barberos.map(b=>`<option value="${b.id}">${esc(b.nombre)}</option>`).join('')}</select>
+ <label for="dia">Fecha</label><input type="date" id="dia" min="${hoy}" value="${hoy}">
+ <label>Hora</label><div class="hs" id="hs"></div>
+ <form id="f" hidden><label for="nm">Tu nombre</label><input id="nm" autocomplete="name" required>
+ <label for="tl">Tu teléfono</label><input id="tl" type="tel" autocomplete="tel" inputmode="tel" required>
+ <button class="btn" id="go">Reservar cita</button></form>`;
+ ['sv','br','dia'].forEach(i=>$('#'+i).onchange=horas);
+ $('#f').onsubmit=reservar;horas();
+})();
+async function horas(){
+ T=null;$('#f').hidden=true;$('#hs').innerHTML='<span class="mute">Buscando horas…</span>';
+ if(!$('#dia').value)return;
+ const{data,error}=await sb.rpc('horas_libres_publicas',{p_slug:slug,p_dia:$('#dia').value,p_barbero:$('#br').value,p_servicio:$('#sv').value});
+ if(error)return $('#hs').innerHTML=`<span class="mute">${esc(error.message)}</span>`;
+ $('#hs').innerHTML=data.length?data.map(x=>`<button type="button" class="h" data-t="${x.inicio}">${hh(x.inicio)}</button>`).join(''):'<span class="mute">No hay horas libres ese día. Prueba otra fecha u otro barbero.</span>';
+ document.querySelectorAll('.h').forEach(b=>b.onclick=()=>{T=b.dataset.t;document.querySelectorAll('.h').forEach(x=>x.classList.toggle('on',x===b));$('#f').hidden=false});
+}
+async function reservar(e){
+ e.preventDefault();if(!T)return toast('Elige una hora.');
+ const b=$('#go');b.disabled=true;
+ const{error}=await sb.rpc('reservar_cita_publica',{p_slug:slug,p_nombre:$('#nm').value,p_telefono:$('#tl').value,p_barbero:$('#br').value,p_servicio:$('#sv').value,p_inicio:T});
+ if(error){b.disabled=false;toast(error.message);return horas()}
+ const dia=new Date(T).toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',timeZone:TZ});
+ app.innerHTML=`<h1>¡Cita reservada!</h1><div class="ok"><strong>${esc(C.negocio.nombre)}</strong><br>${esc(dia)} a las ${hh(T)}<br>${esc($('#sv').selectedOptions[0]?.text||'')}<br>con ${esc($('#br').selectedOptions[0]?.text||'')}</div><p class="mute">Te esperamos. Si no puedes asistir, avísale a la barbería${C.negocio.telefono?' al '+esc(C.negocio.telefono):''}.</p>`;
+}
+</script>
+</body>
+</html>

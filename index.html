@@ -261,7 +261,7 @@ async function ventas(){
  document.querySelectorAll('.row').forEach(b=>b.onclick=()=>detalleVenta(data.find(v=>v.id===b.dataset.id)));
 }
 async function nuevaVenta(){
- const[cl,ba,se,pr]=await Promise.all([['clientes','id,nombre'],['barberos','id,nombre,modelo_pago'],['servicios','id,nombre,precio,tipo_comision,comision_valor'],['productos','id,nombre,precio_venta,costo_unitario']].map(([t,s])=>sb.from(t).select(s).eq('estado','ACTIVO').order('nombre').then(r=>r.data||[])));
+ const[cl,ba,se,pr]=await Promise.all([['clientes','id,nombre'],['barberos','id,nombre,modelo_pago,porcentaje_comision'],['servicios','id,nombre,precio,tipo_comision,comision_valor'],['productos','id,nombre,precio_venta,costo_unitario']].map(([t,s])=>sb.from(t).select(s).eq('estado','ACTIVO').order('nombre').then(r=>r.data||[])));
  if(!se.length&&!pr.length)return toast('Primero crea un servicio o un producto.',true);
  const items=[...se.map(x=>({k:'s:'+x.id,n:x.nombre,p:Number(x.precio)})),...pr.map(x=>({k:'p:'+x.id,n:x.nombre,p:Number(x.precio_venta)}))];
  const op=a=>a.map(o=>`<option value="${o.id}">${esc(o.nombre)}</option>`).join('');
@@ -293,7 +293,7 @@ async function nuevaVenta(){
   const{data:v,error}=await sb.from('ventas').insert({negocio_id:nid,cliente_id:f.cliente_id||null,barbero_id:f.barbero_id||null,descuento:c.ds,metodo_pago_principal:(PG.slice().sort((a,b)=>b.v-a.v)[0]?.m)||'EFECTIVO',creado_por:S.perfil.id}).select('id').single();
   if(error)return toast(traducir(error.message),true);
   const det=c.L.map(l=>{const s=l.i.k[0]==='s',id=l.i.k.slice(2),sv=s&&se.find(x=>x.id===id),pd=!s&&pr.find(x=>x.id===id);
-   const com=sv&&bar&&bar.modelo_pago!=='ALQUILER'?(sv.tipo_comision==='PORCENTAJE'?sv.precio*l.q*sv.comision_valor/100:sv.comision_valor*l.q):0;
+   const com=sv&&bar&&bar.modelo_pago!=='ALQUILER'?(Number(sv.comision_valor)>0?(sv.tipo_comision==='PORCENTAJE'?sv.precio*l.q*sv.comision_valor/100:sv.comision_valor*l.q):sv.precio*l.q*Number(bar.porcentaje_comision)/100):0;
    return{negocio_id:nid,venta_id:v.id,tipo_item:s?'SERVICIO':'PRODUCTO',servicio_id:s?id:null,producto_id:s?null:id,descripcion:l.i.n,cantidad:l.q,precio_unitario:l.i.p,costo_unitario:pd?pd.costo_unitario:0,comision_generada:com}});
   let r=await sb.from('detalle_ventas').insert(det);
   if(!r.error&&PG.length)r=await sb.from('pagos').insert(PG.map(x=>({negocio_id:nid,venta_id:v.id,valor_pago:x.v,metodo_pago:x.m,recibido_por:S.perfil.id})));

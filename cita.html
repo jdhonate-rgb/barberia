@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10223F">
+<title>Tu cita</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#10223F;--paper:#F6F7F9;--line:#DDE2EA;--red:#C0272D;--blue:#2F6DB5;--mute:#5B6778;--ok:#1F7A4D}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:16px;line-height:1.4}
+.pole{height:8px;background:repeating-linear-gradient(135deg,var(--red) 0 12px,#fff 12px 24px,var(--blue) 24px 36px,#fff 36px 48px)}
+main{max-width:460px;margin:0 auto;padding:20px 20px 60px}
+h1{font-size:2rem;font-weight:800;letter-spacing:-.02em;margin:.5em 0 .3em;line-height:1.1}
+label{display:block;font-weight:600;font-size:.9rem;margin:16px 0 6px}
+input{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:inherit}
+input:focus,button:focus-visible{outline:3px solid var(--blue);outline-offset:1px}
+button{font:inherit;cursor:pointer}
+.btn{width:100%;margin-top:12px;background:var(--ink);color:#fff;border:0;border-radius:8px;padding:14px;font-weight:600}
+.btn.sec{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.btn.no{background:#fff;color:var(--red);border:1.5px solid var(--red)}
+.btn:disabled{opacity:.6}
+.mute{color:var(--mute)}
+.card{background:#fff;border:1px solid var(--line);border-left:6px solid var(--red);border-radius:10px;padding:18px;margin:16px 0}
+.chip{display:inline-block;font-size:.85rem;font-weight:600;padding:3px 10px;border-radius:99px;background:#E8EDF5;margin-top:8px}
+.chip.CONFIRMADA{background:#DDF2E6;color:var(--ok)}
+.chip.CANCELADA{background:#F9DEDF;color:var(--red)}
+.hs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.h{padding:12px 6px;border:1.5px solid var(--line);background:#fff;border-radius:8px;font-weight:600;color:inherit}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:var(--red);color:#fff;padding:12px 18px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center}
+#toast.show{opacity:1}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="pole"></div><main id="app"><p class="mute">Cargando…</p></main><div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const sb=supabase.createClient("https://gjqobyjebalbscgozvpa.supabase.co","sb_publishable_lEZmkS6mVv7WdiM3u4upeA_m64a4zM6");
+const $=s=>document.querySelector(s),app=$('#app');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TZ='America/Bogota',tk=new URLSearchParams(location.search).get('t')||'';
+const hh=t=>new Date(t).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit',timeZone:TZ});
+const cuando=t=>new Date(t).toLocaleDateString('es-CO',{weekday:'long',day:'numeric',month:'long',timeZone:TZ})+' a las '+hh(t);
+const f2=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.className='show';clearTimeout(tt);tt=setTimeout(()=>t.className='',4500)}
+let C;
+async function cargar(){
+ const{data}=await sb.rpc('cita_publica',{p_token:tk});
+ if(!data)return app.innerHTML='<h1>Enlace no válido</h1><p class="mute">No encontramos esta cita. Pide a la barbería que te envíe el enlace de nuevo.</p>';
+ C=data;const activa=['PENDIENTE','CONFIRMADA'].includes(C.estado)&&new Date(C.inicio)>new Date();
+ const est={PENDIENTE:'Pendiente de confirmar',CONFIRMADA:'Confirmada',CANCELADA:'Cancelada',ATENDIDA:'Atendida',NO_ASISTIO:'No asististe'}[C.estado]||C.estado;
+ app.innerHTML=`<h1>Hola, ${esc(C.cliente)}</h1><p class="mute">Esta es tu cita en ${esc(C.negocio)}.</p>
+ <div class="card"><strong>${esc(cuando(C.inicio))}</strong><br>${esc(C.servicio)} con ${esc(C.barbero)}${C.direccion?'<br><span class="mute">'+esc(C.direccion)+'</span>':''}<br><span class="chip ${C.estado}">${esc(est)}</span></div>
+ ${activa?`<button class="btn" id="ok"${C.estado==='CONFIRMADA'?' hidden':''}>Confirmar que asistiré</button><button class="btn sec" id="ch">Cambiar la hora</button><button class="btn no" id="no">Cancelar la cita</button><div id="cb"></div>`
+ :`<p class="mute">Esta cita ya no se puede modificar${C.telefono?'. Para agendar otra, llama al '+esc(C.telefono):''}.</p>`}`;
+ if(!activa)return;
+ $('#ok').onclick=()=>accion('confirmar','¡Listo! Tu cita quedó confirmada.');
+ $('#no').onclick=()=>{if(confirm('¿Seguro que quieres cancelar tu cita?'))accion('cancelar','Tu cita fue cancelada.')};
+ $('#ch').onclick=cambio;
+}
+async function accion(a,msg){
+ const{error}=await sb.rpc('responder_cita_publica',{p_token:tk,p_accion:a});
+ if(error)return toast(error.message);toast(msg);cargar();
+}
+function cambio(){
+ const hoy=f2(new Date());
+ $('#cb').innerHTML=`<label for="dia">Elige otro día</label><input type="date" id="dia" min="${hoy}" value="${hoy}"><label>Horas disponibles</label><div class="hs" id="hs"></div>`;
+ $('#dia').onchange=horas;horas();
+}
+async function horas(){
+ if(!$('#dia').value)return;$('#hs').innerHTML='<span class="mute">Buscando horas…</span>';
+ const{data,error}=await sb.rpc('horas_libres_publicas',{p_slug:C.slug,p_dia:$('#dia').value,p_barbero:C.barbero_id,p_servicio:C.servicio_id});
+ if(error)return $('#hs').innerHTML=`<span class="mute">${esc(error.message)}</span>`;
+ $('#hs').innerHTML=data.length?data.map(x=>`<button type="button" class="h" data-t="${x.inicio}">${hh(x.inicio)}</button>`).join(''):'<span class="mute">No hay horas libres ese día. Prueba otra fecha.</span>';
+ document.querySelectorAll('.h').forEach(b=>b.onclick=async()=>{
+  if(!confirm('¿Cambiar tu cita a '+cuando(b.dataset.t)+'?'))return;
+  const{error}=await sb.rpc('reprogramar_cita_publica',{p_token:tk,p_inicio:b.dataset.t});
+  if(error){toast(error.message);return horas()}toast('Tu cita cambió y quedó confirmada.');cargar()});
+}
+cargar();
+</script>
+</body>
+</html>

@@ -11,6 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
 <style>
+.tap{background:none;border:0;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer}.tap span:last-child::after{content:" ›";color:var(--mute)}.ln2.sub{padding-left:20px;font-size:13px;color:var(--mute)}
 :root{--ink:#10223F;--paper:#F6F7F9;--line:#DDE2EA;--red:#C0272D;--blue:#2F6DB5;--mute:#5B6778;--ok:#1F7A4D}
 *{box-sizing:border-box}
 body{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:16px;line-height:1.4}
@@ -135,11 +136,22 @@ async function cargar(){
  const{data:p,error}=await sb.from('perfiles').select('*,negocios(*)').eq('id',user.id).maybeSingle();
  if(error)return toast(error.message,true);
  if(!p)return onboarding();
- S.perfil=p;S.negocio=p.negocios;shell();
+ S.perfil=p;S.negocio=p.negocios;
+ const{data:ac,error:ea}=await sb.rpc('mi_acceso');S.acceso=!ea&&ac&&ac[0]?ac[0]:null;
+ if(S.acceso&&S.acceso.bloqueada)return bloqueo();
+ shell();avisoPlan();
+}
+function bloqueo(){const a=S.acceso,f=a.vence_en?new Date(a.vence_en+'T12:00:00').toLocaleDateString('es-CO',{day:'numeric',month:'long',year:'numeric'}):'';
+ app.innerHTML=`<div class="pole"></div><div class="auth"><h1>Acceso en pausa</h1><p class="mute">${a.vence_en&&a.dias<0?'El plan de <strong>'+esc(S.negocio.nombre)+'</strong> venció el '+f+'.':'El acceso de <strong>'+esc(S.negocio.nombre)+'</strong> está suspendido.'} Tus datos están guardados. Para reactivarlo, comunícate con quien te presta el servicio y registra tu pago.</p><button class="btn" id="rt">Ya pagué, reintentar</button> <button class="btn sec" id="so">Salir</button></div>`;
+ $('#rt').onclick=cargar;$('#so').onclick=()=>sb.auth.signOut();
+}
+function avisoPlan(){const a=S.acceso;if(!a||a.dias===null||a.dias>5||S.perfil.rol!=='ADMINISTRADOR')return;
+ const t=a.dias<0?'Tu plan venció':a.dias===0?'Tu plan vence hoy':'Tu plan vence en '+a.dias+' día'+(a.dias>1?'s':'');
+ document.querySelector('nav.nav').insertAdjacentHTML('afterend','<div style="background:#FFF4D6;color:#7A5200;padding:10px 16px;font-size:14px;text-align:center">'+t+'. Renueva a tiempo para no perder el acceso.</div>');
 }
 
 /* ---------- Estructura ---------- */
-const MENU=[['inicio','Inicio'],['agenda','Agenda'],['ventas','Ventas'],['clientes','Clientes'],['barberos','Barberos'],['servicios','Servicios'],['productos','Productos'],['caja','Caja',1],['comisiones','Comisiones',1],['ajustes','Ajustes',2]];
+const MENU=[['inicio','Inicio'],['agenda','Agenda'],['ventas','Ventas'],['clientes','Clientes'],['barberos','Barberos',1],['servicios','Servicios'],['productos','Productos',1],['caja','Caja',1],['comisiones','Comisiones',1],['ajustes','Ajustes',2]];
 function shell(){
  app.innerHTML=`<div class="pole"></div><div class="bar">${S.negocio.logo_url?`<img src="${esc(S.negocio.logo_url)}" alt="${esc(S.negocio.nombre)}" style="height:44px;display:block">`:`<strong>${esc(S.negocio.nombre)}</strong>`}<span><small>${esc(S.perfil.nombre)}, ${S.perfil.rol.toLowerCase()}</small> <button class="link light" id="out">Salir</button></span></div>
  <nav class="nav">${MENU.filter(m=>!m[2]||(m[2]===2?S.perfil.rol==='ADMINISTRADOR':ADM.includes(S.perfil.rol))).map(([k,l])=>`<button data-v="${k}">${l}</button>`).join('')}</nav><div class="wrap"><main id="main"></main></div>`;
@@ -162,7 +174,7 @@ const CFG={
   f:[['nombre','Nombre','text',1],['categoria','Categoría','text'],['descripcion','Descripción','area'],['precio','Precio','number',1],['duracion_minutos','Duración (minutos)','number',1],['tipo_comision','Tipo de comisión','sel:PORCENTAJE,VALOR_FIJO'],['comision_valor','Valor de comisión','number']],
   l:r=>[r.nombre,dinero(r.precio)+', '+r.duracion_minutos+' min']},
  productos:{t:'Productos',uno:'producto',w:ADM,
-  f:[['nombre','Nombre','text',1],['categoria','Categoría','text'],['descripcion','Descripción','area'],['costo_unitario','Costo de compra','number'],['precio_venta','Precio de venta','number',1],['stock_minimo','Stock mínimo','number']],
+  f:[['nombre','Nombre','text',1],['categoria','Categoría (ej. Cera, Shampoo)','text'],['descripcion','Descripción','area'],['costo_unitario','Costo por unidad: lo que te cuesta cada una','number'],['precio_venta','Precio de venta: lo que paga el cliente','number',1],['stock_minimo','Avisarme cuando queden menos de (unidades)','number']],
   l:r=>[r.nombre,dinero(r.precio_venta)+', en stock: '+(r.existencias??0)]},
  cuentas:{t:'Cuentas de recaudo',uno:'cuenta',w:ADM,
   f:[['nombre','Nombre (ej. Nequi Harold)','text',1],['detalle','Número o detalle','text']],
@@ -190,17 +202,30 @@ async function formulario(k,r,despues){
   else if(t.startsWith('ref:'))el=`<select id="${id}" name="${n}"><option value="">Sin asignar</option>${refs[t.slice(4)].map(o=>`<option value="${o.id}"${o.id===v?' selected':''}>${esc(o.nombre)}</option>`).join('')}</select>`;
   else el=`<input id="${id}" name="${n}" type="${t}"${t==='number'?' step="any" min="0" inputmode="decimal"':''} value="${esc(v)}"${req?' required':''}>`;
   return `<label for="${id}">${l}</label>${el}`};
- dlg.innerHTML=`<form id="df"><h2>${r?'Editar':'Nuevo'} ${c.uno}</h2>${c.f.map(campo).join('')}<div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar</button></div>${r&&k==='barberos'?'<button type="button" class="btn sec block" id="hr">Horario de atención</button>':''}${r&&k==='productos'?'<button type="button" class="btn sec block" id="st">Registrar entrada de stock</button>':''}${r?`<button type="button" class="btn sec block" id="tg">${r.estado==='ACTIVO'?'Desactivar':'Reactivar'} ${c.uno}</button>`:''}</form>`;
+ dlg.innerHTML=`<form id="df"><h2>${r?'Editar':'Nuevo'} ${c.uno}</h2>${r&&k==='productos'?`<p class="mute">En stock ahora: <strong>${r.existencias??0}</strong> unidades</p>`:''}${c.f.map(campo).join('')}${!r&&k==='productos'?'<label for="c_si">Unidades que tienes ahora (opcional)</label><input id="c_si" name="stock_ini" type="number" min="0" step="1" inputmode="numeric">':''}<div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar</button></div>${r&&k==='barberos'?'<button type="button" class="btn sec block" id="hr">Horario de atención</button>':''}${r&&k==='productos'?'<button type="button" class="btn sec block" id="st">Registrar entrada de stock</button>':''}${r?`<button type="button" class="btn sec block" id="tg">${r.estado==='ACTIVO'?'Desactivar':'Reactivar'} ${c.uno}</button>`:''}</form>`;
  dlg.showModal();
  $('#cx').onclick=()=>dlg.close();
  $('#df').onsubmit=async e=>{e.preventDefault();const fd=new FormData(e.target),o={};
   for(const[n,,t]of c.f){const v=fd.get(n);o[n]=t==='number'?(v===''?0:Number(v)):(v===''?(r?null:undefined):v)}
-  const op=r?sb.from(k).update(o).eq('id',r.id):sb.from(k).insert({...o,negocio_id:S.perfil.negocio_id});
-  const{error}=await op;if(error)return toast(traducir(error.message),true);dlg.close();toast('Guardado');despues()};
+  const op=r?sb.from(k).update(o).eq('id',r.id):sb.from(k).insert({...o,negocio_id:S.perfil.negocio_id}).select('id').single();
+  const{data:nuevo,error}=await op;if(error)return toast(traducir(error.message),true);
+  const si=Number(fd.get('stock_ini'));if(!r&&k==='productos'&&si>0&&nuevo)await sb.from('movimientos_inventario').insert({negocio_id:S.perfil.negocio_id,producto_id:nuevo.id,tipo_movimiento:'ENTRADA',cantidad:si,costo_unitario:o.costo_unitario,motivo:'Compra',usuario_responsable:S.perfil.id});
+  dlg.close();toast('Guardado');despues()};
  if(r&&k==='barberos')$('#hr').onclick=()=>horarios(r);
- if(r&&k==='productos')$('#st').onclick=async()=>{const n=Number(prompt('¿Cuántas unidades entraron?'));if(!(n>0))return;
-  const{error}=await sb.from('movimientos_inventario').insert({negocio_id:S.perfil.negocio_id,producto_id:r.id,tipo_movimiento:'ENTRADA',cantidad:n,costo_unitario:r.costo_unitario,motivo:'Compra',usuario_responsable:S.perfil.id});
-  if(error)return toast(error.message,true);dlg.close();toast('Stock actualizado');despues()};
+ if(r&&k==='productos')$('#st').onclick=()=>{
+  const ej='Ejemplo: compraste 10 por $50.000, escribe 10 y 50000.';
+  dlg.innerHTML=`<form id="sf"><h2>Entrada de ${esc(r.nombre)}</h2><p class="mute">Hoy hay ${r.existencias??0} en stock. Anota lo que compraste.</p>
+  <label for="s1">Unidades que entraron</label><input id="s1" type="number" min="1" step="1" inputmode="numeric" required>
+  <label for="s2">Total que pagaste por todas (opcional)</label><input id="s2" type="number" min="0" inputmode="decimal">
+  <p class="mute" id="s3">${ej}</p>
+  <div class="acts"><button type="button" class="btn sec" id="sx">Cancelar</button><button class="btn">Guardar entrada</button></div></form>`;
+  const calc=()=>{const n=Number($('#s1').value),t=Number($('#s2').value);$('#s3').textContent=n>0&&t>0?'Cada unidad te costó '+dinero(t/n)+'.':ej};
+  $('#s1').oninput=calc;$('#s2').oninput=calc;$('#sx').onclick=()=>dlg.close();
+  $('#sf').onsubmit=async e=>{e.preventDefault();const n=Number($('#s1').value),t=Number($('#s2').value),cu=t>0?Math.round(t/n):Number(r.costo_unitario);
+   const{error}=await sb.from('movimientos_inventario').insert({negocio_id:S.perfil.negocio_id,producto_id:r.id,tipo_movimiento:'ENTRADA',cantidad:n,costo_unitario:cu,motivo:'Compra',usuario_responsable:S.perfil.id});
+   if(error)return toast(error.message,true);
+   if(t>0)await sb.from('productos').update({costo_unitario:cu}).eq('id',r.id);
+   dlg.close();toast('Stock actualizado');despues()}};
  if(r)$('#tg').onclick=async()=>{const{error}=await sb.from(k).update({estado:r.estado==='ACTIVO'?'INACTIVO':'ACTIVO'}).eq('id',r.id);if(error)return toast(error.message,true);dlg.close();despues()};
 }
 
@@ -267,7 +292,7 @@ async function horarios(b){
 /* ---------- Ventas y pagos ---------- */
 const METODOS=['EFECTIVO','TRANSFERENCIA','TARJETA','NEQUI','DAVIPLATA'].map(m=>`<option value="${m}">${bonito(m)}</option>`).join('');
 async function ventas(){
- const{data,error}=await sb.from('ventas').select('*,clientes(nombre),barberos(nombre)').order('fecha_hora',{ascending:false}).limit(40);
+ let q=sb.from('ventas').select('*,clientes(nombre),barberos(nombre)').order('fecha_hora',{ascending:false}).limit(40);if(S.perfil.rol==='BARBERO')q=q.eq('barbero_id',S.perfil.barbero_id);const{data,error}=await q;
  if(error)return toast(error.message,true);
  $('#main').innerHTML=`<div class="head"><h2>Ventas</h2><button class="btn" id="nv">Nueva venta</button></div>
  ${data.length?data.map(v=>`<button class="row" data-id="${v.id}"><span><strong>${esc(v.clientes?.nombre||'Cliente de paso')}</strong><br><small>${new Date(v.fecha_hora).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}, ${dinero(v.total_venta)}${v.saldo_pendiente>0&&v.estado_venta!=='ANULADA'?', debe '+dinero(v.saldo_pendiente):''}</small></span><span class="chip ${v.estado_venta}">${bonito(v.estado_venta)}</span></button>`).join(''):'<p class="empty">Aún no hay ventas. Toca “Nueva venta” para cobrar la primera.</p>'}`;
@@ -275,7 +300,8 @@ async function ventas(){
  document.querySelectorAll('.row').forEach(b=>b.onclick=()=>detalleVenta(data.find(v=>v.id===b.dataset.id)));
 }
 async function nuevaVenta(){
- const[cl,ba,se,pr,cu]=await Promise.all([['clientes','id,nombre'],['barberos','id,nombre,modelo_pago,porcentaje_comision'],['servicios','id,nombre,precio,tipo_comision,comision_valor'],['productos','id,nombre,precio_venta,costo_unitario'],['cuentas','id,nombre,detalle']].map(([t,s])=>sb.from(t).select(s).eq('estado','ACTIVO').order('nombre').then(r=>r.data||[])));
+ let[cl,ba,se,pr,cu]=await Promise.all([['clientes','id,nombre'],['barberos','id,nombre,modelo_pago,porcentaje_comision'],['servicios','id,nombre,precio,tipo_comision,comision_valor'],['productos','id,nombre,precio_venta,costo_unitario'],['cuentas','id,nombre,detalle']].map(([t,s])=>sb.from(t).select(s).eq('estado','ACTIVO').order('nombre').then(r=>r.data||[])));
+ const SOLO=S.perfil.rol==='BARBERO';if(SOLO){pr.length=0;ba=ba.filter(b=>b.id===S.perfil.barbero_id)}
  if(!se.length&&!pr.length)return toast('Primero crea un servicio o un producto.',true);
  const items=[...se.map(x=>({k:'s:'+x.id,n:x.nombre,p:Number(x.precio)})),...pr.map(x=>({k:'p:'+x.id,n:x.nombre,p:Number(x.precio_venta)}))];
  const op=a=>a.map(o=>`<option value="${o.id}">${esc(o.nombre)}</option>`).join('');
@@ -283,9 +309,9 @@ async function nuevaVenta(){
  const pl=()=>`<div class="ln"><select aria-label="Método de pago">${METODOS}</select><input type="number" min="0" inputmode="decimal" aria-label="Valor recibido"><select class="cu" hidden style="grid-column:1/-1" aria-label="Cuenta donde entró el pago"><option value="">Elige la cuenta donde entró</option>${cu.map(x=>`<option value="${x.id}">${esc(x.nombre)}${x.detalle?' ('+esc(x.detalle)+')':''}</option>`).join('')}</select></div>`;
  dlg.innerHTML=`<form id="df"><h2>Nueva venta</h2>
  <label for="v1">Cliente</label><select id="v1" name="cliente_id"><option value="">Cliente de paso</option>${op(cl)}</select>
- <label for="v2">Barbero</label><select id="v2" name="barbero_id"><option value="">Sin barbero</option>${op(ba)}</select>
- <label>Servicios y productos</label><div id="lns">${lin()}</div><button type="button" class="link" id="ad">Agregar otro ítem</button>
- <label for="v3">Descuento</label><input id="v3" name="descuento" type="number" min="0" value="0" inputmode="decimal">
+ <label for="v2">Barbero</label><select id="v2" name="barbero_id">${SOLO?'':'<option value="">Sin barbero</option>'}${op(ba)}</select>
+ <label>${SOLO?'Servicios':'Servicios y productos'}</label><div id="lns">${lin()}</div><button type="button" class="link" id="ad">Agregar otro ítem</button>
+ ${SOLO?'<input id="v3" name="descuento" type="hidden" value="0">':'<label for="v3">Descuento</label><input id="v3" name="descuento" type="number" min="0" value="0" inputmode="decimal">'}
  <p class="tot" id="tt"></p>
  <label>Pagos recibidos</label><div id="pgs">${pl()}</div><button type="button" class="link" id="ap">Agregar otro método de pago</button><p class="mute" id="fl"></p>
  <div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Cobrar</button></div></form>`;
@@ -430,26 +456,41 @@ async function informe(){
  $('#rg').onchange=x=>{S.rg=x.target.value;informe()};
  if(rg==='custom')['ra','rb'].forEach(i=>$('#'+i).onchange=x=>{S[i]=x.target.value;informe()});
  const[V,D,P,G,C]=(await Promise.all([
-  sb.from('ventas').select('descuento').neq('estado_venta','ANULADA').gte('fecha_hora',A).lt('fecha_hora',B).limit(5000),
-  sb.from('detalle_ventas').select('tipo_item,descripcion,cantidad,subtotal,costo_unitario,comision_generada,ventas!inner(estado_venta,fecha_hora,barberos(nombre))').neq('ventas.estado_venta','ANULADA').gte('ventas.fecha_hora',A).lt('ventas.fecha_hora',B).limit(5000),
-  sb.from('pagos').select('valor_pago,metodo_pago,cuentas(nombre),ventas!inner(estado_venta)').eq('estado_pago','REGISTRADO').neq('ventas.estado_venta','ANULADA').gte('fecha_hora',A).lt('fecha_hora',B).limit(5000),
-  sb.from('gastos').select('categoria_gasto,valor').eq('estado_gasto','REGISTRADO').gte('fecha_hora',A).lt('fecha_hora',B).limit(5000),
+  sb.from('ventas').select('descuento,fecha_hora,clientes(nombre)').neq('estado_venta','ANULADA').gte('fecha_hora',A).lt('fecha_hora',B).limit(5000),
+  sb.from('detalle_ventas').select('tipo_item,descripcion,cantidad,subtotal,costo_unitario,comision_generada,ventas!inner(estado_venta,fecha_hora,clientes(nombre),barberos(nombre))').neq('ventas.estado_venta','ANULADA').gte('ventas.fecha_hora',A).lt('ventas.fecha_hora',B).limit(5000),
+  sb.from('pagos').select('valor_pago,metodo_pago,fecha_hora,cuentas(nombre,detalle),ventas!inner(estado_venta,clientes(nombre))').eq('estado_pago','REGISTRADO').neq('ventas.estado_venta','ANULADA').gte('fecha_hora',A).lt('fecha_hora',B).limit(5000),
+  sb.from('gastos').select('categoria_gasto,descripcion,proveedor,fecha_hora,valor').eq('estado_gasto','REGISTRADO').gte('fecha_hora',A).lt('fecha_hora',B).limit(5000),
   sb.from('citas').select('estado').gte('inicio',A).lt('inicio',B).limit(5000)])).map(r=>r.data||[]);
  const sum=(a,f)=>a.reduce((t,x)=>t+Number(f(x)||0),0),cl=x=>Number(x.costo_unitario)*Number(x.cantidad)+Number(x.comision_generada);
  const bruto=sum(D,x=>x.subtotal),desc=sum(V,x=>x.descuento),neto=bruto-desc,costo=sum(D,x=>Number(x.costo_unitario)*Number(x.cantidad)),com=sum(D,x=>x.comision_generada);
  const gast=sum(G.filter(x=>!['COMISIONES','PRODUCTOS'].includes(x.categoria_gasto)),x=>x.valor),util=neto-costo-com-gast;
- const grp=(a,k,f)=>{const m={};a.forEach(x=>{const n=k(x);m[n]=m[n]||{n,c:0,i:0,k:0};f(m[n],x)});return Object.values(m)};
- const lin=(g,e)=>fila2(esc(g.n)+'<br><small>'+g.c+' '+e+', ingresos '+dinero(g.i)+', costo '+dinero(g.k)+'</small>',dinero(g.i-g.k));
+ const grp=(a,k,f)=>{const m={};a.forEach(x=>{const n=k(x);m[n]=m[n]||{n,c:0,i:0,k:0,l:[]};m[n].l.push(x);f(m[n],x)});return Object.values(m)};
+ const R={},cdo=d=>new Date(d).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+ const fd=(id,t,a,b,f)=>{R[id]={t,b,f};return `<button class="ln2 tap" data-k="${id}"><span>${a}</span><span>${b}</span></button>`};
+ const itm=(x,v)=>fila2(esc(x.descripcion||'Ítem')+(Number(x.cantidad)>1?' ×'+x.cantidad:'')+'<br><small>'+cdo(x.ventas.fecha_hora)+', '+esc(x.ventas.clientes?.nombre||'Cliente de paso')+', '+esc(x.ventas.barberos?.nombre||'Sin barbero')+'</small>',dinero(v(x)));
+ const GO=G.filter(x=>!['COMISIONES','PRODUCTOS'].includes(x.categoria_gasto));
+ let nid=0;
+ const DP=D.filter(x=>x.tipo_item==='PRODUCTO'),DS=D.filter(x=>x.tipo_item!=='PRODUCTO'),ingP=sum(DP,x=>x.subtotal),utP=ingP-sum(DP,cl),ingS=sum(DS,x=>x.subtotal),utS=ingS-sum(DS,cl);
+ const porItem=(a,e)=>()=>grp(a,x=>x.descripcion||'Ítem',(g,x)=>{g.c+=Number(x.cantidad);g.i+=Number(x.subtotal);g.k+=cl(x)}).sort((p,q)=>(q.i-q.k)-(p.i-p.k)).map(g=>fila2(esc(g.n)+'<br><small>'+g.c+' '+e+', ingresos '+dinero(g.i)+', costo '+dinero(g.k)+'</small>','Utilidad '+dinero(g.i-g.k))).join('');
+ const lin=(g,e)=>fd('m'+(nid++),g.n,esc(g.n)+'<br><small>'+g.c+' '+e+', ingresos '+dinero(g.i)+', costo '+dinero(g.k)+'</small>',dinero(g.i-g.k),()=>g.l.map(x=>itm(x,y=>Number(y.subtotal)-cl(y))).join(''));
  const mg=(a,k,e,flt)=>grp(a.filter(flt||(()=>true)),k,(g,x)=>{g.c+=Number(x.cantidad);g.i+=Number(x.subtotal);g.k+=cl(x)}).sort((p,q)=>(q.i-q.k)-(p.i-p.k)).map(g=>lin(g,e));
  const sec=(t,r)=>r.length?`<label>${t}</label>`+r.join(''):'';
- const pm=grp(P,x=>bonito(x.metodo_pago),(g,x)=>{g.i+=Number(x.valor_pago)}).map(g=>fila2(esc(g.n),dinero(g.i))),pc=grp(P.filter(x=>x.cuentas),x=>x.cuentas.nombre,(g,x)=>{g.i+=Number(x.valor_pago)}).map(g=>fila2(esc(g.n),dinero(g.i)));
+ const pm=grp(P,x=>x.metodo_pago,(g,x)=>{g.i+=Number(x.valor_pago)}).map(g=>{
+  const por={};g.l.forEach(p=>{const n=p.cuentas?p.cuentas.nombre:'Sin cuenta registrada';por[n]=(por[n]||0)+Number(p.valor_pago)});
+  const sub=g.n==='EFECTIVO'?'':Object.entries(por).map(([n,v])=>`<div class="ln2 sub"><span>${esc(n)}</span><span>${dinero(v)}</span></div>`).join('');
+  R['p'+g.n]={pay:1,m:g.n,l:g.l};
+  return `<button class="ln2 tap" data-k="p${g.n}"><span>${esc(bonito(g.n))}</span><span>${dinero(g.i)}</span></button>${sub}`});
  $('#inf').innerHTML=`<div class="kp"><div><small>Ventas netas</small><strong>${dinero(neto)}</strong></div><div><small>Utilidad estimada</small><strong>${dinero(util)}</strong></div><div><small>Ventas</small><strong>${V.length}</strong></div><div><small>Citas atendidas</small><strong>${C.filter(x=>x.estado==='ATENDIDA').length}</strong></div></div>
- ${fila2('Ventas brutas',dinero(bruto))}${fila2('Descuentos','-'+dinero(desc))}${fila2('Costo de productos vendidos','-'+dinero(costo))}${fila2('Comisiones de barberos','-'+dinero(com))}${fila2('Gastos operativos','-'+dinero(gast))}${fila2('Utilidad estimada',dinero(util),'tot')}
+ ${fd('bruto','Ventas brutas','Ventas brutas',dinero(bruto),()=>D.map(x=>itm(x,y=>y.subtotal)).join(''))}${fd('vprod','Venta de productos','Venta de productos<br><small>Te deja de utilidad '+dinero(utP)+'</small>',dinero(ingP),porItem(DP,'vendidos'))}${fd('vserv','Venta de servicios','Venta de servicios<br><small>Te deja '+dinero(utS)+' después de comisiones</small>',dinero(ingS),porItem(DS,'servicios'))}${fd('desc','Descuentos','Descuentos','-'+dinero(desc),()=>V.filter(x=>Number(x.descuento)>0).map(x=>fila2(cdo(x.fecha_hora)+', '+esc(x.clientes?.nombre||'Cliente de paso'),'-'+dinero(x.descuento))).join(''))}${fd('costo','Costo de productos vendidos','Costo de productos vendidos','-'+dinero(costo),()=>D.filter(x=>Number(x.costo_unitario)*Number(x.cantidad)>0).map(x=>itm(x,y=>Number(y.costo_unitario)*Number(y.cantidad))).join(''))}${fd('com','Comisiones de barberos','Comisiones de barberos','-'+dinero(com),()=>D.filter(x=>Number(x.comision_generada)>0).map(x=>itm(x,y=>y.comision_generada)).join(''))}${fd('gast','Gastos operativos','Gastos operativos','-'+dinero(gast),()=>GO.map(x=>fila2(esc(bonito(x.categoria_gasto||'Gasto'))+(x.descripcion?', '+esc(x.descripcion):'')+'<br><small>'+cdo(x.fecha_hora)+(x.proveedor?', '+esc(x.proveedor):'')+'</small>',dinero(x.valor))).join(''))}${fila2('Utilidad estimada',dinero(util),'tot')}
  <p class="mute">No se restan aparte las compras de mercancía ni las liquidaciones de comisión: su costo ya está en las líneas de arriba.</p>
  ${sec('Margen por barbero',mg(D,x=>x.ventas.barberos?.nombre||'Sin barbero','servicios y productos'))}
  ${sec('Margen por producto',mg(D,x=>x.descripcion,'vendidos',x=>x.tipo_item==='PRODUCTO'))}
  ${sec('Margen por servicio',mg(D,x=>x.descripcion,'servicios',x=>x.tipo_item==='SERVICIO'))}
- ${sec('Cobrado por método de pago',pm)}${sec('Cobrado por cuenta',pc)}`;
+ ${sec('Cobrado por método de pago',pm)}`;
+ $('#inf').onclick=e=>{const b=e.target.closest('[data-k]'),r=b&&R[b.dataset.k];if(!r)return;
+  if(r.pay)return detallePagos(r.m,r.l);
+  dlg.innerHTML=`<h2>${esc(r.t)}</h2><p class="tot">${r.b}</p>${r.f()||'<p class="empty">Sin movimientos en este periodo.</p>'}<div class="acts"><button type="button" class="btn sec" id="cx">Cerrar</button></div>`;
+  dlg.showModal();$('#cx').onclick=()=>dlg.close()};
 }
 
 /* ---------- Resumen y ajustes ---------- */

@@ -114,9 +114,14 @@ function onboarding(){
  <label for="sl">Enlace de reservas</label><input id="sl" pattern="[a-z0-9-]{3,40}" title="Entre 3 y 40 letras minúsculas, números o guiones" required>
  <label for="na">Tu nombre</label><input id="na" required>
  <button class="btn block">Crear mi barbería</button></form>
+ <hr style="margin:28px 0;border:0;border-top:1px solid var(--line)"><h2>¿Te invitaron a una barbería?</h2>
+ <form id="jf"><label for="jc">Código de invitación</label><input id="jc" autocomplete="off" required><label for="jn">Tu nombre</label><input id="jn" required><button class="btn block">Unirme con el código</button></form>
  <p style="text-align:center;margin-top:20px"><button class="link" id="out">Salir</button></p></div>`;
  $('#nb').oninput=e=>{if(!$('#sl').dataset.m)$('#sl').value=slug(e.target.value)};
  $('#sl').oninput=e=>{e.target.dataset.m=1};
+ $('#jf').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('.btn');b.disabled=true;
+  const{error}=await sb.rpc('unirse_con_codigo',{p_codigo:$('#jc').value,p_nombre:$('#jn').value.trim()});
+  b.disabled=false;if(error)return toast(error.message,true);cargar()};
  $('#out').onclick=()=>sb.auth.signOut();
  $('#f').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('.btn');b.disabled=true;
   const{error}=await sb.rpc('crear_negocio',{p_nombre:$('#nb').value.trim(),p_slug:$('#sl').value,p_nombre_admin:$('#na').value.trim()});
@@ -410,10 +415,33 @@ function ajustes(){
  <label for="a4">Correo</label><input id="a4" name="correo" type="email" value="${esc(n.correo)}">
  <label class="chk"><input type="checkbox" name="reserva_publica"${n.reserva_publica?' checked':''}> Recibir reservas en línea</label>
  <label class="chk"><input type="checkbox" name="permitir_saldos"${n.permitir_saldos?' checked':''}> Permitir ventas con saldo pendiente (fiado)</label>
- <button class="btn block">Guardar ajustes</button></form>`;
+ <button class="btn block">Guardar ajustes</button></form>
+ <h2 style="margin-top:32px">Equipo</h2><div id="eq">Cargando…</div><button type="button" class="btn sec block" id="iv">Invitar a alguien</button>`;
  $('#cp').onclick=()=>navigator.clipboard.writeText(url).then(()=>toast('Enlace copiado')).catch(()=>{$('#ur').select();toast('Mantén presionado el enlace y copia')});
  $('#af').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),o={nombre:f.get('nombre').trim(),telefono:f.get('telefono')||null,direccion:f.get('direccion')||null,correo:f.get('correo')||null,reserva_publica:!!f.get('reserva_publica'),permitir_saldos:!!f.get('permitir_saldos')};
   const{error}=await sb.from('negocios').update(o).eq('id',n.id);if(error)return toast(error.message,true);Object.assign(S.negocio,o);toast('Ajustes guardados')};
+ equipo();
+}
+
+/* ---------- Equipo e invitaciones ---------- */
+async function equipo(){
+ const{data}=await sb.from('perfiles').select('id,nombre,rol,estado').order('creado_en');
+ $('#eq').innerHTML=(data||[]).map(p=>`<div class="row"><span><strong>${esc(p.nombre)}</strong><br><small>${bonito(p.rol)}${p.id===S.perfil.id?', tú':''}${p.estado==='ACTIVO'?'':', inactivo'}</small></span>${p.id===S.perfil.id?'':`<button type="button" class="btn sec" data-p="${p.id}" data-e="${p.estado}">${p.estado==='ACTIVO'?'Desactivar':'Reactivar'}</button>`}</div>`).join('');
+ document.querySelectorAll('[data-p]').forEach(b=>b.onclick=async()=>{const{error}=await sb.from('perfiles').update({estado:b.dataset.e==='ACTIVO'?'INACTIVO':'ACTIVO'}).eq('id',b.dataset.p);if(error)return toast(error.message,true);equipo()});
+ $('#iv').onclick=invitar;
+}
+async function invitar(){
+ const{data:ba}=await sb.from('barberos').select('id,nombre').eq('estado','ACTIVO').order('nombre');
+ dlg.innerHTML=`<form id="df"><h2>Invitar a alguien</h2><label for="i1">Rol</label><select id="i1"><option value="BARBERO">Barbero</option><option value="SUPERVISOR">Supervisor</option><option value="ADMINISTRADOR">Administrador</option></select>
+ <label for="i2">Corresponde al barbero</label><select id="i2"><option value="">Ninguno</option>${(ba||[]).map(b=>`<option value="${b.id}">${esc(b.nombre)}</option>`).join('')}</select>
+ <div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Crear invitación</button></div></form>`;
+ dlg.showModal();$('#cx').onclick=()=>dlg.close();
+ $('#df').onsubmit=async e=>{e.preventDefault();
+  const{data,error}=await sb.from('invitaciones').insert({negocio_id:S.perfil.negocio_id,rol:$('#i1').value,barbero_id:$('#i2').value||null}).select('codigo').single();
+  if(error)return toast(error.message,true);
+  const url=location.origin+location.pathname.replace(/[^/]*$/,''),msg=`Te invitaron a ${S.negocio.nombre}. 1) Entra a ${url} 2) Toca “Soy nuevo, crear cuenta” 3) Cuando te lo pida, escribe este código: ${data.codigo} (vence en 7 días)`;
+  dlg.innerHTML=`<h2>Invitación lista</h2><p>Código: <strong>${data.codigo}</strong></p><p class="mute">Vence en 7 días y solo sirve una vez.</p><a class="btn block" style="display:block;text-align:center;text-decoration:none;background:#1F7A4D" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg)}">Enviar por WhatsApp</a><div class="acts"><button type="button" class="btn sec" id="cx">Cerrar</button></div>`;
+  $('#cx').onclick=()=>dlg.close()};
 }
 
 /* ---------- Inicio ---------- */

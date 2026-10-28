@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#10223F">
+<title>Panel del propietario</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#10223F;--paper:#F6F7F9;--line:#DDE2EA;--red:#C0272D;--blue:#2F6DB5;--mute:#5B6778;--ok:#1F7A4D;--warn:#9A6200}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;background:var(--paper);color:var(--ink);font-size:16px;line-height:1.4}
+.pole{height:8px;background:repeating-linear-gradient(135deg,var(--red) 0 12px,#fff 12px 24px,var(--blue) 24px 36px,#fff 36px 48px)}
+main{max-width:760px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:1.9rem;font-weight:800;letter-spacing:-.02em;margin:.4em 0;line-height:1.1}
+h2{margin:0 0 8px;font-size:1.4rem}
+label{display:block;font-weight:600;font-size:.9rem;margin:14px 0 6px}
+input,select{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fff;color:inherit}
+input:focus,select:focus,button:focus-visible{outline:3px solid var(--blue);outline-offset:1px}
+button{font:inherit;cursor:pointer}
+.btn{background:var(--ink);color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:600}
+.btn.sec{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+.btn.block{width:100%;margin-top:18px}
+.mute{color:var(--mute)}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.kp{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0}
+.kp div,.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
+.kp small{display:block;color:var(--mute)}.kp strong{font-size:1.15rem}
+.card{margin-bottom:10px}
+.ac{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.chip{display:inline-block;font-size:.8rem;font-weight:600;padding:3px 10px;border-radius:99px;margin-left:6px}
+.chip.bien{background:#DDF2E6;color:var(--ok)}.chip.ojo{background:#FFF0D1;color:var(--warn)}.chip.mal{background:#F9DEDF;color:var(--red)}
+dialog{border:0;border-radius:14px;padding:20px;width:min(480px,calc(100vw - 24px));color:var(--ink)}
+dialog::backdrop{background:rgba(16,34,63,.55)}
+.acts{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:90vw;text-align:center;z-index:20}
+#toast.show{opacity:1}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="pole"></div><main id="app"></main><dialog id="dlg"></dialog><div id="toast" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+const sb=supabase.createClient("https://gjqobyjebalbscgozvpa.supabase.co","sb_publishable_lEZmkS6mVv7WdiM3u4upeA_m64a4zM6");
+const $=s=>document.querySelector(s),app=$('#app'),dlg=$('#dlg');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dinero=n=>new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0);
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.className='show';clearTimeout(tt);tt=setTimeout(()=>t.className='',4500)}
+const salir=async()=>{await sb.auth.signOut();login()};
+function login(){
+ app.innerHTML=`<h1>Panel del propietario</h1><p class="mute">Solo para quien administra la plataforma.</p>
+ <form id="f"><label for="em">Correo</label><input id="em" type="email" autocomplete="email" required>
+ <label for="pw">Contraseña</label><input id="pw" type="password" autocomplete="current-password" required><button class="btn block">Entrar</button></form>`;
+ $('#f').onsubmit=async e=>{e.preventDefault();const{error}=await sb.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});
+  if(error)return toast('Correo o contraseña incorrectos.');lista()};
+}
+async function lista(){
+ const{data,error}=await sb.rpc('admin_negocios');
+ if(error){app.innerHTML=`<h1>Sin acceso</h1><p class="mute">Esta cuenta no es de propietario.</p><button class="btn sec" id="out">Salir</button>`;$('#out').onclick=salir;return}
+ const vig=data.filter(n=>n.estado==='ACTIVO'&&n.dias!==null&&n.dias>=0).length,tot=data.reduce((t,n)=>t+Number(n.pagado),0);
+ app.innerHTML=`<div class="head"><h1>Barberías</h1><button class="btn sec" id="out">Salir</button></div>
+ <div class="kp"><div><small>Barberías</small><strong>${data.length}</strong></div><div><small>Con plan vigente</small><strong>${vig}</strong></div><div><small>Total cobrado</small><strong>${dinero(tot)}</strong></div></div>
+ ${data.map(n=>{const susp=n.estado!=='ACTIVO',v=n.dias===null?'Sin plan':n.dias<0?`Vencida hace ${-n.dias} día${n.dias<-1?'s':''}`:n.dias===0?'Vence hoy':`Vence en ${n.dias} día${n.dias>1?'s':''}`,cl=susp||n.dias===null||n.dias<0?'mal':n.dias<=5?'ojo':'bien';
+  return `<div class="card"><strong>${esc(n.nombre)}</strong><span class="chip ${cl}">${susp?'Suspendida':v}</span><br><small class="mute">${esc(n.slug)}, plan ${esc(n.plan||'ninguno')}, vence ${n.vence_en||'sin fecha'}, ${n.usuarios} usuario${n.usuarios==1?'':'s'}, pagado ${dinero(n.pagado)}</small>
+  <div class="ac"><button class="btn" data-r="${n.id}" data-n="${esc(n.nombre)}">Registrar pago y renovar</button><button class="btn sec" data-s="${n.id}" data-e="${n.estado}">${susp?'Reactivar':'Suspender'}</button></div></div>`}).join('')||'<p class="mute">Aún no hay barberías.</p>'}`;
+ $('#out').onclick=salir;
+ document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>renovar(b.dataset.r,b.dataset.n));
+ document.querySelectorAll('[data-s]').forEach(b=>b.onclick=async()=>{
+  if(b.dataset.e==='ACTIVO'&&!confirm('¿Suspender esta barbería? Nadie podrá entrar hasta que la reactives.'))return;
+  const{error}=await sb.rpc('admin_suspender',{p_negocio:b.dataset.s,p_suspender:b.dataset.e==='ACTIVO'});
+  if(error)return toast(error.message);toast('Listo');lista()});
+}
+function renovar(id,nombre){
+ dlg.innerHTML=`<form id="df"><h2>Renovar ${esc(nombre)}</h2><p class="mute">El plan se extiende desde la fecha de vencimiento (o desde hoy si ya venció).</p>
+ <label for="m1">Meses que pagó</label><input id="m1" type="number" min="1" max="24" value="1" required>
+ <label for="m2">Valor pagado</label><input id="m2" type="number" min="0" inputmode="decimal" required>
+ <label for="m3">Plan</label><select id="m3"><option value="MENSUAL">Mensual</option><option value="ANUAL">Anual</option><option value="PRUEBA">Prueba</option></select>
+ <label for="m4">Método de pago</label><select id="m4"><option>EFECTIVO</option><option>TRANSFERENCIA</option><option>NEQUI</option><option>DAVIPLATA</option></select>
+ <label for="m5">Nota (opcional)</label><input id="m5">
+ <div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Registrar y renovar</button></div></form>`;
+ dlg.showModal();$('#cx').onclick=()=>dlg.close();
+ $('#df').onsubmit=async e=>{e.preventDefault();
+  const{data,error}=await sb.rpc('admin_renovar',{p_negocio:id,p_meses:Number($('#m1').value),p_valor:Number($('#m2').value),p_plan:$('#m3').value,p_metodo:$('#m4').value,p_nota:$('#m5').value||null});
+  if(error)return toast(error.message);dlg.close();toast('Renovada hasta el '+data);lista()};
+}
+(async()=>{const{data:{session}}=await sb.auth.getSession();session?lista():login()})();
+</script>
+</body>
+</html>

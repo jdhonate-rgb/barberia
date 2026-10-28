@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#10223F">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>Barbería</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
@@ -138,7 +141,7 @@ async function cargar(){
 /* ---------- Estructura ---------- */
 const MENU=[['inicio','Inicio'],['agenda','Agenda'],['ventas','Ventas'],['clientes','Clientes'],['barberos','Barberos'],['servicios','Servicios'],['productos','Productos'],['caja','Caja',1],['comisiones','Comisiones',1],['ajustes','Ajustes',2]];
 function shell(){
- app.innerHTML=`<div class="pole"></div><div class="bar"><strong>${esc(S.negocio.nombre)}</strong><span><small>${esc(S.perfil.nombre)}, ${S.perfil.rol.toLowerCase()}</small> <button class="link light" id="out">Salir</button></span></div>
+ app.innerHTML=`<div class="pole"></div><div class="bar">${S.negocio.logo_url?`<img src="${esc(S.negocio.logo_url)}" alt="${esc(S.negocio.nombre)}" style="height:44px;display:block">`:`<strong>${esc(S.negocio.nombre)}</strong>`}<span><small>${esc(S.perfil.nombre)}, ${S.perfil.rol.toLowerCase()}</small> <button class="link light" id="out">Salir</button></span></div>
  <nav class="nav">${MENU.filter(m=>!m[2]||(m[2]===2?S.perfil.rol==='ADMINISTRADOR':ADM.includes(S.perfil.rol))).map(([k,l])=>`<button data-v="${k}">${l}</button>`).join('')}</nav><div class="wrap"><main id="main"></main></div>`;
  $('#out').onclick=()=>sb.auth.signOut();
  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{S.vista=b.dataset.v;ir()});
@@ -160,7 +163,10 @@ const CFG={
   l:r=>[r.nombre,dinero(r.precio)+', '+r.duracion_minutos+' min']},
  productos:{t:'Productos',uno:'producto',w:ADM,
   f:[['nombre','Nombre','text',1],['categoria','Categoría','text'],['descripcion','Descripción','area'],['costo_unitario','Costo de compra','number'],['precio_venta','Precio de venta','number',1],['stock_minimo','Stock mínimo','number']],
-  l:r=>[r.nombre,dinero(r.precio_venta)+', en stock: '+(r.existencias??0)]}
+  l:r=>[r.nombre,dinero(r.precio_venta)+', en stock: '+(r.existencias??0)]},
+ cuentas:{t:'Cuentas de recaudo',uno:'cuenta',w:ADM,
+  f:[['nombre','Nombre (ej. Nequi Harold)','text',1],['detalle','Número o detalle','text']],
+  l:r=>[r.nombre,r.detalle||'Sin detalle']}
 };
 async function crud(k){
  const c=CFG[k],main=$('#main'),puede=c.w.includes(S.perfil.rol);let ver=false,q='',rows=[];
@@ -269,12 +275,12 @@ async function ventas(){
  document.querySelectorAll('.row').forEach(b=>b.onclick=()=>detalleVenta(data.find(v=>v.id===b.dataset.id)));
 }
 async function nuevaVenta(){
- const[cl,ba,se,pr]=await Promise.all([['clientes','id,nombre'],['barberos','id,nombre,modelo_pago,porcentaje_comision'],['servicios','id,nombre,precio,tipo_comision,comision_valor'],['productos','id,nombre,precio_venta,costo_unitario']].map(([t,s])=>sb.from(t).select(s).eq('estado','ACTIVO').order('nombre').then(r=>r.data||[])));
+ const[cl,ba,se,pr,cu]=await Promise.all([['clientes','id,nombre'],['barberos','id,nombre,modelo_pago,porcentaje_comision'],['servicios','id,nombre,precio,tipo_comision,comision_valor'],['productos','id,nombre,precio_venta,costo_unitario'],['cuentas','id,nombre,detalle']].map(([t,s])=>sb.from(t).select(s).eq('estado','ACTIVO').order('nombre').then(r=>r.data||[])));
  if(!se.length&&!pr.length)return toast('Primero crea un servicio o un producto.',true);
  const items=[...se.map(x=>({k:'s:'+x.id,n:x.nombre,p:Number(x.precio)})),...pr.map(x=>({k:'p:'+x.id,n:x.nombre,p:Number(x.precio_venta)}))];
  const op=a=>a.map(o=>`<option value="${o.id}">${esc(o.nombre)}</option>`).join('');
  const lin=()=>`<div class="ln"><select aria-label="Ítem">${items.map(i=>`<option value="${i.k}">${esc(i.n)}, ${dinero(i.p)}</option>`).join('')}</select><input type="number" min="1" value="1" inputmode="numeric" aria-label="Cantidad"></div>`;
- const pl=()=>`<div class="ln"><select aria-label="Método de pago">${METODOS}</select><input type="number" min="0" inputmode="decimal" aria-label="Valor recibido"></div>`;
+ const pl=()=>`<div class="ln"><select aria-label="Método de pago">${METODOS}</select><input type="number" min="0" inputmode="decimal" aria-label="Valor recibido"><select class="cu" hidden style="grid-column:1/-1" aria-label="Cuenta donde entró el pago"><option value="">Elige la cuenta donde entró</option>${cu.map(x=>`<option value="${x.id}">${esc(x.nombre)}${x.detalle?' ('+esc(x.detalle)+')':''}</option>`).join('')}</select></div>`;
  dlg.innerHTML=`<form id="df"><h2>Nueva venta</h2>
  <label for="v1">Cliente</label><select id="v1" name="cliente_id"><option value="">Cliente de paso</option>${op(cl)}</select>
  <label for="v2">Barbero</label><select id="v2" name="barbero_id"><option value="">Sin barbero</option>${op(ba)}</select>
@@ -285,7 +291,8 @@ async function nuevaVenta(){
  <div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Cobrar</button></div></form>`;
  dlg.showModal();$('#cx').onclick=()=>dlg.close();
  const calc=()=>{const L=[...document.querySelectorAll('#lns .ln')].map(l=>({i:items.find(x=>x.k===l.querySelector('select').value),q:Math.max(1,Number(l.querySelector('input').value)||1)}));const br=L.reduce((s,l)=>s+l.i.p*l.q,0),ds=Number($('#v3').value)||0;return{L,ds,t:br-ds}};
- const pagos=()=>[...document.querySelectorAll('#pgs .ln')].map(l=>({m:l.querySelector('select').value,v:Number(l.querySelector('input').value)||0})).filter(x=>x.v>0);
+ const pagos=()=>[...document.querySelectorAll('#pgs .ln')].map(l=>({m:l.querySelector('select').value,v:Number(l.querySelector('input').value)||0,c:l.querySelector('.cu').value||null})).filter(x=>x.v>0);
+ $('#pgs').onchange=e=>{if(e.target.tagName==='SELECT'&&!e.target.classList.contains('cu'))e.target.closest('.ln').querySelector('.cu').hidden=e.target.value==='EFECTIVO'||!cu.length};
  const ref=()=>{const c=calc(),f=$('#pgs .ln input');$('#tt').textContent='Total: '+dinero(c.t);
   if(!f.dataset.m&&document.querySelectorAll('#pgs .ln').length===1)f.value=Math.max(0,c.t);
   const rec=pagos().reduce((s,x)=>s+x.v,0);$('#fl').textContent=rec<c.t?'Falta por cobrar: '+dinero(c.t-rec):rec>c.t?'Sobran '+dinero(rec-c.t):'Pago completo'};
@@ -297,6 +304,7 @@ async function nuevaVenta(){
   if(c.t<0)return toast('El descuento no puede superar el total.',true);
   if(pago>c.t)return toast('El pago no puede superar el total.',true);
   if(pago<c.t&&!S.negocio.permitir_saldos)return toast('Esta barbería no permite saldos pendientes. Recibe el pago completo.',true);
+  if(cu.length&&PG.some(x=>x.m!=='EFECTIVO'&&!x.c))return toast('Elige la cuenta donde entró cada pago que no es en efectivo.',true);
   const bar=ba.find(x=>x.id===f.barbero_id),nid=S.perfil.negocio_id;
   const{data:v,error}=await sb.from('ventas').insert({negocio_id:nid,cliente_id:f.cliente_id||null,barbero_id:f.barbero_id||null,descuento:c.ds,metodo_pago_principal:(PG.slice().sort((a,b)=>b.v-a.v)[0]?.m)||'EFECTIVO',creado_por:S.perfil.id}).select('id').single();
   if(error)return toast(traducir(error.message),true);
@@ -304,7 +312,7 @@ async function nuevaVenta(){
    const com=sv&&bar&&bar.modelo_pago!=='ALQUILER'?(Number(sv.comision_valor)>0?(sv.tipo_comision==='PORCENTAJE'?sv.precio*l.q*sv.comision_valor/100:sv.comision_valor*l.q):sv.precio*l.q*Number(bar.porcentaje_comision)/100):0;
    return{negocio_id:nid,venta_id:v.id,tipo_item:s?'SERVICIO':'PRODUCTO',servicio_id:s?id:null,producto_id:s?null:id,descripcion:l.i.n,cantidad:l.q,precio_unitario:l.i.p,costo_unitario:pd?pd.costo_unitario:0,comision_generada:com}});
   let r=await sb.from('detalle_ventas').insert(det);
-  if(!r.error&&PG.length)r=await sb.from('pagos').insert(PG.map(x=>({negocio_id:nid,venta_id:v.id,valor_pago:x.v,metodo_pago:x.m,recibido_por:S.perfil.id})));
+  if(!r.error&&PG.length)r=await sb.from('pagos').insert(PG.map(x=>({negocio_id:nid,venta_id:v.id,valor_pago:x.v,metodo_pago:x.m,cuenta_id:x.c,recibido_por:S.perfil.id})));
   if(r.error){await sb.from('ventas').delete().eq('id',v.id);return toast(r.error.message,true)}
   dlg.close();toast('Venta registrada');ventas()};
 }
@@ -342,17 +350,18 @@ async function caja(){
   $('#gs').onclick=()=>gasto(null);
   $('#ab').onclick=async()=>{const{error}=await sb.from('cajas').insert({negocio_id:S.perfil.negocio_id,usuario_apertura:S.perfil.id,saldo_inicial:Number($('#si').value)||0});if(error)return toast(error.message,true);caja()};
   return}
- const[{data:pg},{data:gs}]=await Promise.all([sb.from('pagos').select('valor_pago,metodo_pago,ventas(estado_venta)').eq('estado_pago','REGISTRADO').gte('fecha_hora',cj.fecha_apertura),sb.from('gastos').select('*').eq('estado_gasto','REGISTRADO').gte('fecha_hora',cj.fecha_apertura).order('fecha_hora',{ascending:false})]);
+ const[{data:pg},{data:gs}]=await Promise.all([sb.from('pagos').select('valor_pago,metodo_pago,fecha_hora,cuentas(nombre,detalle),ventas(estado_venta,clientes(nombre))').eq('estado_pago','REGISTRADO').gte('fecha_hora',cj.fecha_apertura),sb.from('gastos').select('*').eq('estado_gasto','REGISTRADO').gte('fecha_hora',cj.fecha_apertura).order('fecha_hora',{ascending:false})]);
  const por={};(pg||[]).filter(p=>p.ventas?.estado_venta!=='ANULADA').forEach(p=>por[p.metodo_pago]=(por[p.metodo_pago]||0)+Number(p.valor_pago));
  const gEf=(gs||[]).filter(g=>g.metodo_pago==='EFECTIVO').reduce((s,g)=>s+Number(g.valor),0),esp=Number(cj.saldo_inicial)+(por.EFECTIVO||0)-gEf;
  main.innerHTML=`<div class="head"><h2>Caja abierta</h2><button class="btn sec" id="gs">Registrar gasto</button></div>
  <p class="mute">Desde ${new Date(cj.fecha_apertura).toLocaleString('es-CO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</p>
  ${fila2('Efectivo inicial',dinero(cj.saldo_inicial))}
- ${Object.entries(por).map(([m,v])=>fila2('Cobrado en '+bonito(m).toLowerCase(),dinero(v))).join('')||'<p class="empty">Aún no hay cobros desde que abriste la caja.</p>'}
+ ${Object.entries(por).map(([m,v])=>`<button type="button" class="row" data-m="${m}"><span>Cobrado en ${bonito(m).toLowerCase()}, ver detalle</span><strong>${dinero(v)}</strong></button>`).join('')||'<p class="empty">Aún no hay cobros desde que abriste la caja.</p>'}
  ${fila2('Gastos en efectivo','-'+dinero(gEf))}${fila2('Efectivo que debe haber',dinero(esp),'tot')}
  ${gs?.length?'<label>Gastos del turno</label>'+gs.map(g=>fila2(esc(g.descripcion||bonito(g.categoria_gasto))+', '+bonito(g.metodo_pago).toLowerCase(),dinero(g.valor))).join(''):''}
  <button class="btn block" id="ce">Cerrar caja</button>`;
  $('#gs').onclick=()=>gasto(cj);
+ document.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>detallePagos(b.dataset.m,(pg||[]).filter(p=>p.ventas?.estado_venta!=='ANULADA'&&p.metodo_pago===b.dataset.m)));
  $('#ce').onclick=()=>{dlg.innerHTML=`<form id="df"><h2>Cerrar caja</h2><p>Debe haber <strong>${dinero(esp)}</strong> en efectivo.</p><label for="ct">Efectivo contado</label><input id="ct" type="number" min="0" inputmode="decimal" required><label for="co">Observaciones</label><textarea id="co" rows="2"></textarea><div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Cerrar caja</button></div></form>`;
   dlg.showModal();$('#cx').onclick=()=>dlg.close();
   $('#df').onsubmit=async e=>{e.preventDefault();const n=Number($('#ct').value);
@@ -360,7 +369,7 @@ async function caja(){
    if(error)return toast(error.message,true);dlg.close();toast('Caja cerrada');caja()}};
 }
 function gasto(cj){
- dlg.innerHTML=`<form id="df"><h2>Registrar gasto</h2><label for="g1">Categoría</label><select id="g1" name="categoria_gasto">${['OPERATIVO','PRODUCTOS','SERVICIOS_PUBLICOS','ARRIENDO','NOMINA','OTRO'].map(o=>`<option value="${o}">${bonito(o)}</option>`).join('')}</select>
+ dlg.innerHTML=`<form id="df"><h2>Registrar gasto</h2><label for="g1">Categoría</label><select id="g1" name="categoria_gasto">${['OPERATIVO','PRODUCTOS','COMISIONES','SERVICIOS_PUBLICOS','ARRIENDO','NOMINA','OTRO'].map(o=>`<option value="${o}">${bonito(o)}</option>`).join('')}</select>
  <label for="g2">Descripción</label><input id="g2" name="descripcion" required><label for="g3">Valor</label><input id="g3" name="valor" type="number" min="1" inputmode="decimal" required>
  <label for="g4">Método de pago</label><select id="g4" name="metodo_pago">${METODOS}</select><label for="g5">Proveedor</label><input id="g5" name="proveedor">
  <div class="acts"><button type="button" class="btn sec" id="cx">Cancelar</button><button class="btn">Guardar gasto</button></div></form>`;
@@ -378,8 +387,12 @@ async function comisiones(){
  $('#main').innerHTML=`<div class="head"><h2>Comisiones</h2></div><p class="mute">Comisiones por pagar de ventas ya cobradas por completo.</p>
  ${B.length?B.map(([id,p])=>`<div class="row"><span><strong>${esc(p.n)}</strong><br><small>${p.L.length} servicio${p.L.length>1?'s':''}</small></span><span><strong>${dinero(p.t)}</strong><br><button class="btn" data-b="${id}">Liquidar</button></span></div>`).join(''):'<p class="empty">No hay comisiones pendientes.</p>'}`;
  document.querySelectorAll('[data-b]').forEach(b=>b.onclick=async()=>{const p=P[b.dataset.b];if(!confirm('¿Liquidar '+dinero(p.t)+' a '+p.n+'?'))return;
+  const ef=confirm('¿Se pagó en efectivo desde la caja?\nAceptar = efectivo. Cancelar = transferencia.');
   const ahora=new Date().toISOString(),{error}=await sb.from('comisiones').insert(p.L.map(x=>({negocio_id:S.perfil.negocio_id,barbero_id:b.dataset.b,detalle_id:x.id,valor_base:x.subtotal,valor_comision:x.comision_generada,estado_liquidacion:'LIQUIDADA',fecha_pago:ahora})));
-  if(error)return toast(error.message,true);toast('Comisión liquidada');comisiones()});
+  if(error)return toast(error.message,true);
+  const{data:cj}=await sb.from('cajas').select('id').eq('estado_caja','ABIERTA').maybeSingle();
+  const r=await sb.from('gastos').insert({negocio_id:S.perfil.negocio_id,categoria_gasto:'COMISIONES',descripcion:'Liquidación de comisión a '+p.n,valor:p.t,metodo_pago:ef?'EFECTIVO':'TRANSFERENCIA',usuario_registro:S.perfil.id,caja_id:cj?.id||null});
+  toast(r.error?'Se liquidó, pero no se registró en caja: '+r.error.message:'Comisión liquidada y registrada en caja',!!r.error);comisiones()});
 }
 
 /* ---------- Recordatorio por WhatsApp ---------- */
@@ -392,8 +405,55 @@ function wa(c){
  return `<a class="btn block" style="display:block;text-align:center;text-decoration:none;background:#1F7A4D" target="_blank" rel="noopener" href="https://wa.me/${num}?text=${encodeURIComponent(msg)}">Recordar por WhatsApp</a>`;
 }
 
+/* ---------- Detalle de cobros y panel gerencial ---------- */
+function detallePagos(m,L){
+ const por={};L.forEach(p=>{const n=p.cuentas?p.cuentas.nombre+(p.cuentas.detalle?' ('+p.cuentas.detalle+')':''):'Sin cuenta registrada';por[n]=(por[n]||0)+Number(p.valor_pago)});
+ dlg.innerHTML=`<h2>Cobrado en ${bonito(m).toLowerCase()}</h2><p class="tot">${dinero(L.reduce((t,p)=>t+Number(p.valor_pago),0))}</p>
+ ${m==='EFECTIVO'?'':'<label>Por cuenta</label>'+Object.entries(por).map(([n,v])=>fila2(esc(n),dinero(v))).join('')}
+ <label>Movimientos</label>${L.map(p=>fila2(hora(p.fecha_hora)+', '+esc(p.ventas?.clientes?.nombre||'Cliente de paso')+(p.cuentas&&m!=='EFECTIVO'?'<br><small>'+esc(p.cuentas.nombre)+'</small>':''),dinero(p.valor_pago))).join('')}
+ <div class="acts"><button type="button" class="btn sec" id="cx">Cerrar</button></div>`;
+ dlg.showModal();$('#cx').onclick=()=>dlg.close();
+}
+const RG=[['hoy','Hoy'],['ayer','Ayer'],['semana','Esta semana'],['mes','Este mes'],['30','Últimos 30 días'],['custom','Personalizado']];
+function rango(v,a,b){const d=new Date();d.setHours(0,0,0,0);const s=new Date(d);let e=new Date(d);e.setDate(e.getDate()+1);
+ if(v==='ayer'){s.setDate(s.getDate()-1);e=new Date(d)}
+ else if(v==='semana')s.setDate(s.getDate()-((s.getDay()+6)%7));
+ else if(v==='mes')s.setDate(1);
+ else if(v==='30')s.setDate(s.getDate()-29);
+ else if(v==='custom'){const x=new Date((a||fecha(d))+'T00:00:00');e=new Date((b||fecha(d))+'T00:00:00');e.setDate(e.getDate()+1);return[x,e]}
+ return[s,e]}
+function inicio(){return ADM.includes(S.perfil.rol)?informe():inicioSimple()}
+async function informe(){
+ const[s,e]=rango(S.rg||'hoy',S.ra,S.rb),A=s.toISOString(),B=e.toISOString(),rg=S.rg||'hoy';
+ $('#main').innerHTML=`<div class="head"><h2>Panel gerencial</h2></div><select id="rg" aria-label="Periodo">${RG.map(([k,l])=>`<option value="${k}"${k===rg?' selected':''}>${l}</option>`).join('')}</select>
+ ${rg==='custom'?`<div class="dia" style="margin-top:8px"><input type="date" id="ra" value="${S.ra||fecha(new Date())}" aria-label="Desde"><input type="date" id="rb" value="${S.rb||fecha(new Date())}" aria-label="Hasta"></div>`:''}<div id="inf"><p class="empty">Calculando…</p></div>`;
+ $('#rg').onchange=x=>{S.rg=x.target.value;informe()};
+ if(rg==='custom')['ra','rb'].forEach(i=>$('#'+i).onchange=x=>{S[i]=x.target.value;informe()});
+ const[V,D,P,G,C]=(await Promise.all([
+  sb.from('ventas').select('descuento').neq('estado_venta','ANULADA').gte('fecha_hora',A).lt('fecha_hora',B).limit(5000),
+  sb.from('detalle_ventas').select('tipo_item,descripcion,cantidad,subtotal,costo_unitario,comision_generada,ventas!inner(estado_venta,fecha_hora,barberos(nombre))').neq('ventas.estado_venta','ANULADA').gte('ventas.fecha_hora',A).lt('ventas.fecha_hora',B).limit(5000),
+  sb.from('pagos').select('valor_pago,metodo_pago,cuentas(nombre),ventas!inner(estado_venta)').eq('estado_pago','REGISTRADO').neq('ventas.estado_venta','ANULADA').gte('fecha_hora',A).lt('fecha_hora',B).limit(5000),
+  sb.from('gastos').select('categoria_gasto,valor').eq('estado_gasto','REGISTRADO').gte('fecha_hora',A).lt('fecha_hora',B).limit(5000),
+  sb.from('citas').select('estado').gte('inicio',A).lt('inicio',B).limit(5000)])).map(r=>r.data||[]);
+ const sum=(a,f)=>a.reduce((t,x)=>t+Number(f(x)||0),0),cl=x=>Number(x.costo_unitario)*Number(x.cantidad)+Number(x.comision_generada);
+ const bruto=sum(D,x=>x.subtotal),desc=sum(V,x=>x.descuento),neto=bruto-desc,costo=sum(D,x=>Number(x.costo_unitario)*Number(x.cantidad)),com=sum(D,x=>x.comision_generada);
+ const gast=sum(G.filter(x=>!['COMISIONES','PRODUCTOS'].includes(x.categoria_gasto)),x=>x.valor),util=neto-costo-com-gast;
+ const grp=(a,k,f)=>{const m={};a.forEach(x=>{const n=k(x);m[n]=m[n]||{n,c:0,i:0,k:0};f(m[n],x)});return Object.values(m)};
+ const lin=(g,e)=>fila2(esc(g.n)+'<br><small>'+g.c+' '+e+', ingresos '+dinero(g.i)+', costo '+dinero(g.k)+'</small>',dinero(g.i-g.k));
+ const mg=(a,k,e,flt)=>grp(a.filter(flt||(()=>true)),k,(g,x)=>{g.c+=Number(x.cantidad);g.i+=Number(x.subtotal);g.k+=cl(x)}).sort((p,q)=>(q.i-q.k)-(p.i-p.k)).map(g=>lin(g,e));
+ const sec=(t,r)=>r.length?`<label>${t}</label>`+r.join(''):'';
+ const pm=grp(P,x=>bonito(x.metodo_pago),(g,x)=>{g.i+=Number(x.valor_pago)}).map(g=>fila2(esc(g.n),dinero(g.i))),pc=grp(P.filter(x=>x.cuentas),x=>x.cuentas.nombre,(g,x)=>{g.i+=Number(x.valor_pago)}).map(g=>fila2(esc(g.n),dinero(g.i)));
+ $('#inf').innerHTML=`<div class="kp"><div><small>Ventas netas</small><strong>${dinero(neto)}</strong></div><div><small>Utilidad estimada</small><strong>${dinero(util)}</strong></div><div><small>Ventas</small><strong>${V.length}</strong></div><div><small>Citas atendidas</small><strong>${C.filter(x=>x.estado==='ATENDIDA').length}</strong></div></div>
+ ${fila2('Ventas brutas',dinero(bruto))}${fila2('Descuentos','-'+dinero(desc))}${fila2('Costo de productos vendidos','-'+dinero(costo))}${fila2('Comisiones de barberos','-'+dinero(com))}${fila2('Gastos operativos','-'+dinero(gast))}${fila2('Utilidad estimada',dinero(util),'tot')}
+ <p class="mute">No se restan aparte las compras de mercancía ni las liquidaciones de comisión: su costo ya está en las líneas de arriba.</p>
+ ${sec('Margen por barbero',mg(D,x=>x.ventas.barberos?.nombre||'Sin barbero','servicios y productos'))}
+ ${sec('Margen por producto',mg(D,x=>x.descripcion,'vendidos',x=>x.tipo_item==='PRODUCTO'))}
+ ${sec('Margen por servicio',mg(D,x=>x.descripcion,'servicios',x=>x.tipo_item==='SERVICIO'))}
+ ${sec('Cobrado por método de pago',pm)}${sec('Cobrado por cuenta',pc)}`;
+}
+
 /* ---------- Resumen y ajustes ---------- */
-async function inicio(){
+async function inicioSimple(){
  const h0=new Date();h0.setHours(0,0,0,0);const h1=new Date(h0);h1.setDate(h1.getDate()+1);
  const[{data:v},{data:c},{data:s}]=await Promise.all([
   sb.from('ventas').select('total_venta').neq('estado_venta','ANULADA').gte('fecha_hora',h0.toISOString()).lt('fecha_hora',h1.toISOString()),
@@ -408,7 +468,7 @@ async function inicio(){
 function ajustes(){
  const n=S.negocio,url=location.origin+location.pathname.replace(/[^/]*$/,'')+'reservar.html?n='+n.slug;
  $('#main').innerHTML=`<div class="head"><h2>Ajustes</h2></div>
- <label for="ur">Enlace de reservas para tus clientes</label><input id="ur" value="${esc(url)}" readonly><button type="button" class="btn sec block" id="cp">Copiar enlace</button>
+ <label for="ur">Enlace de reservas para tus clientes</label><input id="ur" value="${esc(url)}" readonly><button type="button" class="btn sec block" id="cp">Copiar enlace</button><button type="button" class="btn sec block" id="ct">Cuentas de recaudo (Nequi, bancos)</button>
  <form id="af"><label for="a1">Nombre de la barbería</label><input id="a1" name="nombre" value="${esc(n.nombre)}" required>
  <label for="a2">Teléfono</label><input id="a2" name="telefono" type="tel" value="${esc(n.telefono)}">
  <label for="a3">Dirección</label><input id="a3" name="direccion" value="${esc(n.direccion)}">
@@ -417,6 +477,7 @@ function ajustes(){
  <label class="chk"><input type="checkbox" name="permitir_saldos"${n.permitir_saldos?' checked':''}> Permitir ventas con saldo pendiente (fiado)</label>
  <button class="btn block">Guardar ajustes</button></form>
  <h2 style="margin-top:32px">Equipo</h2><div id="eq">Cargando…</div><button type="button" class="btn sec block" id="iv">Invitar a alguien</button>`;
+ $('#ct').onclick=()=>{S.vista='cuentas';ir()};
  $('#cp').onclick=()=>navigator.clipboard.writeText(url).then(()=>toast('Enlace copiado')).catch(()=>{$('#ur').select();toast('Mantén presionado el enlace y copia')});
  $('#af').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),o={nombre:f.get('nombre').trim(),telefono:f.get('telefono')||null,direccion:f.get('direccion')||null,correo:f.get('correo')||null,reserva_publica:!!f.get('reserva_publica'),permitir_saldos:!!f.get('permitir_saldos')};
   const{error}=await sb.from('negocios').update(o).eq('id',n.id);if(error)return toast(error.message,true);Object.assign(S.negocio,o);toast('Ajustes guardados')};
@@ -447,6 +508,7 @@ async function invitar(){
 /* ---------- Inicio ---------- */
 sb.auth.onAuthStateChange(ev=>{if(ev==='SIGNED_OUT')pantallaAuth()});
 (async()=>{const{data:{session}}=await sb.auth.getSession();session?cargar():pantallaAuth()})();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
 </html>

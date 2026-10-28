@@ -49,7 +49,7 @@ let C,T=null;
  C=data;
  if(!C.servicios.length||!C.barberos.length)return app.innerHTML=`<h1>${esc(C.negocio.nombre)}</h1><p class="mute">Todavía no hay servicios u horarios disponibles. Intenta más tarde.</p>`;
  const hoy=f2(new Date());
- app.innerHTML=`<h1>${esc(C.negocio.nombre)}</h1><p class="mute">Reserva tu cita en un minuto.${C.negocio.direccion?' '+esc(C.negocio.direccion):''}</p>
+ app.innerHTML=`${C.negocio.logo_url?`<div style="background:#10223F;border-radius:12px;padding:14px;text-align:center"><img src="${esc(C.negocio.logo_url)}" alt="${esc(C.negocio.nombre)}" style="max-width:100%;height:84px"></div>`:''}<h1>${esc(C.negocio.nombre)}</h1><p class="mute">Reserva tu cita en un minuto.${C.negocio.direccion?' '+esc(C.negocio.direccion):''}</p>
  <label for="sv">Servicio</label><select id="sv">${C.servicios.map(s=>`<option value="${s.id}">${esc(s.nombre)}, ${dinero(s.precio)}, ${s.duracion_minutos} min</option>`).join('')}</select>
  <label for="br">Barbero</label><select id="br">${C.barberos.map(b=>`<option value="${b.id}">${esc(b.nombre)}</option>`).join('')}</select>
  <label for="dia">Fecha</label><input type="date" id="dia" min="${hoy}" value="${hoy}">
